@@ -41,7 +41,7 @@
 //M*/
 
 #include "test_precomp.hpp"
-
+#include <windows.h>
 namespace opencv_test { namespace {
 
 #ifdef HAVE_NVCUVID
@@ -57,24 +57,18 @@ CUDA_TEST_P(Video, Reader)
 {
     cv::cuda::setDevice(GET_PARAM(0).deviceID());
 
-    std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "video/" + GET_PARAM(1);
-    inputFile = "rtsp://127.0.0.1/french_guy.264";
+    // CUDA demuxer has to fall back to ffmpeg to process "gpu/video/768x576.avi"
+    if (GET_PARAM(1) == "gpu/video/768x576.avi" && !videoio_registry::hasBackend(CAP_FFMPEG))
+        throw SkipTestException("FFmpeg backend not found");
 
-    //cv::VideoCapture cap;
-    //cap.open(inputFile);
-    //inputFile = "C:\\Users\\b8\\Videos\\jellyfish-120-mbps-4k-uhd-h264.mkv";
-    //inputFile = "rtsp://127.0.0.1/jellyfish-120-mbps-4k-uhd-h264.264";
+    std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "video/" + GET_PARAM(1);
     cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile);
 
     cv::cuda::GpuMat frame;
-    cv::namedWindow("jelly");
-    for (int i = 0; i < 2000; ++i)
+    bool grabbed = false;
+    while(grabbed = reader->nextFrame(frame))
     {
-        ASSERT_TRUE(reader->nextFrame(frame));
-        Mat frameHost;
-        frame.download(frameHost);
-        cv::imshow("jelly",frameHost);
-        cv::waitKey(10);
+        ASSERT_TRUE(grabbed);
         ASSERT_FALSE(frame.empty());
     }
 }
@@ -129,12 +123,12 @@ CUDA_TEST_P(Video, Reader)
 
 #endif // _WIN32
 
-#if defined(HAVE_FFMPEG_WRAPPER) // should this be set in preprocessor or in cvconfig.h
+//#if defined(HAVE_FFMPEG_WRAPPER) // should this be set in preprocessor or in cvconfig.h
 #define VIDEO_SRC "768x576.avi", "1920x1080.avi"
-#else
+//#else
 // CUDA demuxer has to fall back to ffmpeg to process "gpu/video/768x576.avi"
-#define VIDEO_SRC  "1920x1080.avi"
-#endif
+//#define VIDEO_SRC  "1920x1080.avi"
+//#endif
 
 INSTANTIATE_TEST_CASE_P(CUDA_Codec, Video, testing::Combine(
     ALL_DEVICES,
