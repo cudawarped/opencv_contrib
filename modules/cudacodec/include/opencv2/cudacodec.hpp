@@ -338,7 +338,7 @@ public:
     file, especially from container formats avi, mp4 etc.  If the filename provided is invalid, cannot be opened
     or written to, the first call to read()/grab() after calling this function will return false.
      */
-    CV_WRAP virtual bool writeToFile(const char* filename) = 0;
+    CV_WRAP virtual bool writeToFile(const char* filename, const bool autoDetectExt = false) = 0;
 };
 
 /** @brief Interface for video demultiplexing. :
@@ -383,7 +383,7 @@ public:
     file, especially from container formats avi, mp4 etc.  If the filename provided is invalid, cannot be opened
     or written to, the first call to read()/grab() after calling this function will return false.
      */
-    virtual bool writeToFile(const char* filename) = 0;
+    virtual bool writeToFile(const char* filename, const bool autoDetectExt = false) = 0;
 };
 
 /** @brief Creates video reader.
@@ -392,7 +392,7 @@ public:
 
 FFMPEG is used to read videos. User can implement own demultiplexing with cudacodec::RawVideoSource
  */
-CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const String& filename, const String filenameToWrite = "");
+CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const String& filename, const String filenameToWrite = "", const bool autoDetectExt = false);
 /** @overload
 @param source RAW video source implemented by user.
 */

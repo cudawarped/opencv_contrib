@@ -76,9 +76,9 @@ VIDEO_PARSER cv::cudacodec::detail::RawVideoSourceWrapper::videoParser() const
 }
 
 
-bool cv::cudacodec::detail::RawVideoSourceWrapper::writeToFile(const char* filename)
+bool cv::cudacodec::detail::RawVideoSourceWrapper::writeToFile(const char* filename, const bool autoDetectExt)
 {
-    return source_->writeToFile(filename);
+    return source_->writeToFile(filename, autoDetectExt);
 }
 
 void cv::cudacodec::detail::RawVideoSourceWrapper::start()

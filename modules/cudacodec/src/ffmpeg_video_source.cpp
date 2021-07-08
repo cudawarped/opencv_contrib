@@ -112,7 +112,7 @@ void FourccToChromaFormat(const int pixelFormat, ChromaFormat &chromaFormat, int
     }
 }
 
-cv::cudacodec::detail::FFmpegVideoSource::FFmpegVideoSource(const String& fname, const String& filenameToWrite)
+cv::cudacodec::detail::FFmpegVideoSource::FFmpegVideoSource(const String& fname, const String& filenameToWrite, const bool autoDetectExt)
 {
     if (!videoio_registry::hasBackend(CAP_FFMPEG))
         CV_Error(Error::StsNotImplemented, "FFmpeg backend not found");
@@ -125,7 +125,7 @@ cv::cudacodec::detail::FFmpegVideoSource::FFmpegVideoSource(const String& fname,
         CV_Error(Error::StsUnsupportedFormat, "Fetching of RAW video streams is not supported");
     CV_Assert(cap.get(CAP_PROP_FORMAT) == -1);
     if(!filenameToWrite.empty())
-        CV_Assert(cap.writeToFile(filenameToWrite.c_str()));
+        CV_Assert(cap.writeToFile(filenameToWrite.c_str(), autoDetectExt));
 
     int codec = (int)cap.get(CAP_PROP_FOURCC);
     int pixelFormat = (int)cap.get(CAP_PROP_CODEC_PIXEL_FORMAT);
@@ -157,9 +157,9 @@ void cv::cudacodec::detail::FFmpegVideoSource::updateFormat(const int codedWidth
     format_.valid = true;
 }
 
-bool cv::cudacodec::detail::FFmpegVideoSource::writeToFile(const char* filename) {
+bool cv::cudacodec::detail::FFmpegVideoSource::writeToFile(const char* filename, const bool autoDetectExt) {
     std::lock_guard<std::mutex> lck(mtx);
-    return cap.writeToFile(filename);
+    return cap.writeToFile(filename, autoDetectExt);
 
 }
 

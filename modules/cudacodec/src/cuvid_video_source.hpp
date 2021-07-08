@@ -57,7 +57,7 @@ public:
     FormatInfo format() const CV_OVERRIDE;
     void updateFormat(const int codedWidth, const int codedHeight) CV_OVERRIDE;
     VIDEO_PARSER videoParser() const CV_OVERRIDE { return VIDEO_PARSER::CUVID; }
-    bool writeToFile(const char* filename) CV_OVERRIDE { return false; }
+    bool writeToFile(const char* filename, const bool autoDetectExt = false) CV_OVERRIDE { return false; }
     void start() CV_OVERRIDE;
     void stop() CV_OVERRIDE;
     bool isStarted() const CV_OVERRIDE;

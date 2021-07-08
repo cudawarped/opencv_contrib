@@ -48,7 +48,7 @@ using namespace cv::cudacodec;
 
 #ifndef HAVE_NVCUVID
 
-Ptr<VideoReader> cv::cudacodec::createVideoReader(const String&, const String = "") { throw_no_cuda(); return Ptr<VideoReader>(); }
+Ptr<VideoReader> cv::cudacodec::createVideoReader(const String&, const String = "", const bool = false) { throw_no_cuda(); return Ptr<VideoReader>(); }
 Ptr<VideoReader> cv::cudacodec::createVideoReader(const Ptr<RawVideoSource>&) { throw_no_cuda(); return Ptr<VideoReader>(); }
 
 #else // HAVE_NVCUVID
@@ -71,7 +71,7 @@ namespace
 
         VIDEO_PARSER videoParser() const CV_OVERRIDE;
 
-        bool writeToFile(const char* filename) CV_OVERRIDE;
+        bool writeToFile(const char* filename, const bool autoDetectExt = false) CV_OVERRIDE;
 
     private:
         Ptr<VideoSource> videoSource_;
@@ -168,6 +168,7 @@ namespace
                 videoProcParams.second_field      = active_field;
                 videoProcParams.top_field_first   = displayInfo.top_field_first;
                 videoProcParams.unpaired_field    = (num_fields == 1);
+                videoProcParams.output_stream = StreamAccessor::getStream(stream);
 
                 frames_.push_back(std::make_pair(displayInfo, videoProcParams));
             }
@@ -201,15 +202,15 @@ namespace
         return true;
     }
 
-    bool VideoReaderImpl::writeToFile(const char* filename) 
+    bool VideoReaderImpl::writeToFile(const char* filename, const bool autoDetectExt)
     {
-        return videoSource_->writeToFile(filename);
+        return videoSource_->writeToFile(filename, autoDetectExt);
     }
 }
 
 
 
-Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename, const String filenameToWrite)
+Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename, const String filenameToWrite, const bool autoDetectExt)
 {
     CV_Assert( !filename.empty() );
 
@@ -218,7 +219,7 @@ Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename, const 
     try
     {
         // prefer ffmpeg to cuvidGetSourceVideoFormat() which doesn't always return the corrct raw pixel format
-        Ptr<RawVideoSource> source(new FFmpegVideoSource(filename, filenameToWrite));
+        Ptr<RawVideoSource> source(new FFmpegVideoSource(filename, filenameToWrite, autoDetectExt));
         videoSource.reset(new RawVideoSourceWrapper(source));
     }
     catch (...)
