@@ -48,7 +48,7 @@ using namespace cv::cudacodec;
 
 #ifndef HAVE_NVCUVID
 
-Ptr<VideoReader> cv::cudacodec::createVideoReader(const String&) { throw_no_cuda(); return Ptr<VideoReader>(); }
+Ptr<VideoReader> cv::cudacodec::createVideoReader(const String&, const String = "") { throw_no_cuda(); return Ptr<VideoReader>(); }
 Ptr<VideoReader> cv::cudacodec::createVideoReader(const Ptr<RawVideoSource>&) { throw_no_cuda(); return Ptr<VideoReader>(); }
 
 #else // HAVE_NVCUVID
@@ -69,6 +69,10 @@ namespace
 
         FormatInfo format() const CV_OVERRIDE;
 
+        VIDEO_PARSER videoParser() const CV_OVERRIDE;
+
+        bool writeToFile(const char* filename) CV_OVERRIDE;
+
     private:
         Ptr<VideoSource> videoSource_;
 
@@ -84,6 +88,11 @@ namespace
     FormatInfo VideoReaderImpl::format() const
     {
         return videoSource_->format();
+    }
+
+    VIDEO_PARSER VideoReaderImpl::videoParser() const
+    {
+        return videoSource_->videoParser();
     }
 
     VideoReaderImpl::VideoReaderImpl(const Ptr<VideoSource>& source) :
@@ -159,7 +168,6 @@ namespace
                 videoProcParams.second_field      = active_field;
                 videoProcParams.top_field_first   = displayInfo.top_field_first;
                 videoProcParams.unpaired_field    = (num_fields == 1);
-                videoProcParams.output_stream = StreamAccessor::getStream(stream);
 
                 frames_.push_back(std::make_pair(displayInfo, videoProcParams));
             }
@@ -192,9 +200,16 @@ namespace
 
         return true;
     }
+
+    bool VideoReaderImpl::writeToFile(const char* filename) 
+    {
+        return videoSource_->writeToFile(filename);
+    }
 }
 
-Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename)
+
+
+Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename, const String filenameToWrite)
 {
     CV_Assert( !filename.empty() );
 
@@ -203,7 +218,7 @@ Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename)
     try
     {
         // prefer ffmpeg to cuvidGetSourceVideoFormat() which doesn't always return the corrct raw pixel format
-        Ptr<RawVideoSource> source(new FFmpegVideoSource(filename));
+        Ptr<RawVideoSource> source(new FFmpegVideoSource(filename, filenameToWrite));
         videoSource.reset(new RawVideoSourceWrapper(source));
     }
     catch (...)

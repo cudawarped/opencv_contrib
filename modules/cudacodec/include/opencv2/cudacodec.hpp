@@ -276,6 +276,14 @@ enum ChromaFormat
     NumFormats
 };
 
+/** @brief Video Parser.
+ */
+enum class VIDEO_PARSER {
+    FFMPEG = 0,
+    CUVID = 1,
+    USER = 3
+};
+
 /** @brief Struct providing information about video file format. :
  */
 struct FormatInfo
@@ -287,6 +295,7 @@ struct FormatInfo
     int height = 0;//!< Height of the decoded frame returned by nextFrame(frame)
     Rect displayArea;//!< ROI inside the decoded frame returned by nextFrame(frame), containing the useable video frame.
     bool valid = false;
+    double fps = 0;
 };
 
 /** @brief Video reader interface.
@@ -310,6 +319,26 @@ public:
     /** @brief Returns information about video file format.
     */
     virtual FormatInfo format() const = 0;
+
+    /** @brief Returns the selected video parser.
+    */
+    CV_WRAP virtual VIDEO_PARSER videoParser() const = 0;
+
+    /** @brief Signals VideoCapture to start writing the raw bitstream to the given file from the next key frame.
+
+    @param filename Full path to the output file.
+    @return `true` if VideoCapture is open.  This does not mean the file has or can be created as this is
+    performed inside read()/grab().
+
+    The function is intended to be used when streaming from an rtsp source where it is either
+    a) desirable to store the original streamed data, or
+    b) the overhead of re-encoding the decoded frame is undesirable.
+
+    @note This should only be used when streaming from rtsp and is not guaranteed to work when reading from a
+    file, especially from container formats avi, mp4 etc.  If the filename provided is invalid, cannot be opened
+    or written to, the first call to read()/grab() after calling this function will return false.
+     */
+    CV_WRAP virtual bool writeToFile(const char* filename) = 0;
 };
 
 /** @brief Interface for video demultiplexing. :
@@ -335,6 +364,26 @@ public:
     /** @brief Updates the coded width and height inside format.
     */
     virtual void updateFormat(const int codedWidth, const int codedHeight) = 0;
+
+    /** @brief Returns the selected video parser.
+    */
+    virtual VIDEO_PARSER videoParser() const = 0;
+
+    /** @brief Signals VideoCapture to start writing the raw bitstream to the given file from the next key frame.
+
+    @param filename Full path to the output file.
+    @return `true` if VideoCapture is open.  This does not mean the file has or can be created as this is
+    performed inside read()/grab().
+
+    The function is intended to be used when streaming from an rtsp source where it is either
+    a) desirable to store the original streamed data, or
+    b) the overhead of re-encoding the decoded frame is undesirable.
+
+    @note This should only be used when streaming from rtsp and is not guaranteed to work when reading from a
+    file, especially from container formats avi, mp4 etc.  If the filename provided is invalid, cannot be opened
+    or written to, the first call to read()/grab() after calling this function will return false.
+     */
+    virtual bool writeToFile(const char* filename) = 0;
 };
 
 /** @brief Creates video reader.
@@ -343,11 +392,11 @@ public:
 
 FFMPEG is used to read videos. User can implement own demultiplexing with cudacodec::RawVideoSource
  */
-CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const String& filename);
+CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const String& filename, const String filenameToWrite = "");
 /** @overload
 @param source RAW video source implemented by user.
 */
-CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const Ptr<RawVideoSource>& source);
+CV_EXPORTS_W Ptr<VideoReader> createVideoReader(const Ptr<RawVideoSource>& source);// , const String& filenameToWrite);
 
 //! @}
 

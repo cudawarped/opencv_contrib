@@ -51,20 +51,24 @@ namespace cv { namespace cudacodec { namespace detail {
 class FFmpegVideoSource : public RawVideoSource
 {
 public:
-    FFmpegVideoSource(const String& fname);
+    FFmpegVideoSource(const String& fname, const String& filenameToWrite);
     ~FFmpegVideoSource();
 
     bool getNextPacket(unsigned char** data, size_t* size) CV_OVERRIDE;
 
     FormatInfo format() const CV_OVERRIDE;
 
-    void updateFormat(const int codedWidth, const int codedHeight);
+    void updateFormat(const int codedWidth, const int codedHeight) CV_OVERRIDE;
 
+    VIDEO_PARSER videoParser() const CV_OVERRIDE { return VIDEO_PARSER::FFMPEG; }
+
+    bool writeToFile(const char* filename) CV_OVERRIDE;
 
 private:
     FormatInfo format_;
     VideoCapture cap;
     Mat rawFrame;
+    std::mutex mtx;
 };
 
 }}}

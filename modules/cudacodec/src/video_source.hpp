@@ -57,6 +57,8 @@ public:
 
     virtual FormatInfo format() const = 0;
     virtual void updateFormat(const int codedWidth, const int codedHeight) = 0;
+    virtual bool writeToFile(const char* filename) = 0;
+    virtual VIDEO_PARSER videoParser() const = 0;
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual bool isStarted() const = 0;
@@ -78,6 +80,8 @@ public:
 
     FormatInfo format() const CV_OVERRIDE;
     void updateFormat(const int codedWidth, const int codedHeight) CV_OVERRIDE;
+    VIDEO_PARSER videoParser() const CV_OVERRIDE;
+    bool writeToFile(const char* filename) CV_OVERRIDE;
     void start() CV_OVERRIDE;
     void stop() CV_OVERRIDE;
     bool isStarted() const CV_OVERRIDE;

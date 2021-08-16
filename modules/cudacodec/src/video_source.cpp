@@ -70,6 +70,17 @@ void cv::cudacodec::detail::RawVideoSourceWrapper::updateFormat(const int codedW
     source_->updateFormat(codedWidth,codedHeight);
 }
 
+VIDEO_PARSER cv::cudacodec::detail::RawVideoSourceWrapper::videoParser() const
+{
+    return source_->videoParser();
+}
+
+
+bool cv::cudacodec::detail::RawVideoSourceWrapper::writeToFile(const char* filename)
+{
+    return source_->writeToFile(filename);
+}
+
 void cv::cudacodec::detail::RawVideoSourceWrapper::start()
 {
     stop_ = false;
