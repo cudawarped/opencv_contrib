@@ -44,6 +44,7 @@
 #ifndef __FRAME_QUEUE_HPP__
 #define __FRAME_QUEUE_HPP__
 #include <queue>
+#include <atomic>
 
 #include "opencv2/core/utility.hpp"
 
@@ -87,10 +88,10 @@ public:
     void releaseFrame(const CUVIDPARSERDISPINFO& picParams) { isFrameInUse_[picParams.picture_index] = false; }
 
 private:
-    bool isInUse(int pictureIndex) const { return isFrameInUse_[pictureIndex] != 0; }
+    bool isInUse(int pictureIndex) const { return isFrameInUse_[pictureIndex] == true; }
 
     Mutex mtx_;
-    volatile int* isFrameInUse_ = 0;
+    std::atomic<bool>* isFrameInUse_;
     volatile int endOfDecode_ = 0;
     int framesInQueue_ = 0;
     int readPosition_ = 0;

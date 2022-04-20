@@ -59,8 +59,8 @@ void cv::cudacodec::detail::FrameQueue::init(const int _maxSz) {
     AutoLock autoLock(mtx_);
     maxSz = _maxSz;
     displayQueue_ = std::vector<CUVIDPARSERDISPINFO>(maxSz, CUVIDPARSERDISPINFO());
-    isFrameInUse_ = new volatile int[maxSz];
-    std::memset((void*)isFrameInUse_, 0, sizeof(*isFrameInUse_) * maxSz);
+    isFrameInUse_ = new std::atomic<bool>[maxSz];
+    for (int i = 0; i < maxSz; i++) isFrameInUse_[i] = false;
 }
 
 bool cv::cudacodec::detail::FrameQueue::waitUntilFrameAvailable(int pictureIndex)
