@@ -174,7 +174,10 @@ FormatInfo cv::cudacodec::detail::FFmpegVideoSource::format() const
 
 void cv::cudacodec::detail::FFmpegVideoSource::updateFormat(const FormatInfo& videoFormat)
 {
+    // prefer FFmpeg fps over CUVIDEOFORMAT for consistency with VideoCapture
+    const double fps = format_.fps ? format_.fps : videoFormat.fps;
     format_ = videoFormat;
+    format_.fps = fps;
     format_.valid = true;
 }
 

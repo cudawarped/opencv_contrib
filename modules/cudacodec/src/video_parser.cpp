@@ -123,7 +123,7 @@ int CUDAAPI cv::cudacodec::detail::VideoParser::HandleVideoSequence(void* userDa
         newFormat.width = format->coded_width;
         newFormat.height = format->coded_height;
         newFormat.displayArea = Rect(Point(format->display_area.left, format->display_area.top), Point(format->display_area.right, format->display_area.bottom));
-        newFormat.fps = format->frame_rate.numerator / static_cast<float>(format->frame_rate.denominator);
+        newFormat.fps = format->frame_rate.denominator ? format->frame_rate.numerator / static_cast<float>(format->frame_rate.denominator) : 0;
         newFormat.ulNumDecodeSurfaces = min(!thiz->allowFrameDrop_ ? max(thiz->videoDecoder_->nDecodeSurfaces(), static_cast<int>(format->min_num_decode_surfaces)) :
             format->min_num_decode_surfaces * 2, 32);
         if (format->progressive_sequence)
