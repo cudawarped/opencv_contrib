@@ -141,7 +141,7 @@ namespace
 
         typedef NppStatus (*func_t)(const npp_type* pSrc, NppiSize srcSize, int srcStep, NppiRect srcRoi, npp_type* pDst,
                                     int dstStep, NppiRect dstRoi, const double coeffs[][3],
-                                    int interpolation);
+                                    int interpolation, NppStreamContext streamCtx);
     };
 
     template <int DEPTH, typename NppWarpFunc<DEPTH>::func_t func> struct NppWarp
@@ -168,11 +168,12 @@ namespace
             dstroi.height = dst.rows;
             dstroi.width = dst.cols;
 
-            cv::cuda::NppStreamHandler h(stream);
-
+            NppStreamContext nppStreamCtx;
+            nppSafeCall(nppGetStreamContext(&nppStreamCtx));
+            nppStreamCtx.hStream = stream;
             nppSafeCall( func(src.ptr<npp_type>(), srcsz, static_cast<int>(src.step), srcroi,
                               dst.ptr<npp_type>(), static_cast<int>(dst.step), dstroi,
-                              coeffs, npp_inter[interpolation]) );
+                              coeffs, npp_inter[interpolation], nppStreamCtx));
 
             if (stream == 0)
                 cudaSafeCall( cudaDeviceSynchronize() );
@@ -251,20 +252,20 @@ void cv::cuda::warpAffine(InputArray _src, OutputArray _dst, InputArray _M, Size
         static const func_t funcs[2][6][4] =
         {
             {
-                {NppWarp<CV_8U, nppiWarpAffine_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpAffine_8u_C3R>::call, NppWarp<CV_8U, nppiWarpAffine_8u_C4R>::call},
+                {NppWarp<CV_8U, nppiWarpAffine_8u_C1R_Ctx>::call, 0, NppWarp<CV_8U, nppiWarpAffine_8u_C3R_Ctx>::call, NppWarp<CV_8U, nppiWarpAffine_8u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpAffine_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpAffine_16u_C3R>::call, NppWarp<CV_16U, nppiWarpAffine_16u_C4R>::call},
+                {NppWarp<CV_16U, nppiWarpAffine_16u_C1R_Ctx>::call, 0, NppWarp<CV_16U, nppiWarpAffine_16u_C3R_Ctx>::call, NppWarp<CV_16U, nppiWarpAffine_16u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpAffine_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpAffine_32s_C3R>::call, NppWarp<CV_32S, nppiWarpAffine_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpAffine_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpAffine_32f_C3R>::call, NppWarp<CV_32F, nppiWarpAffine_32f_C4R>::call}
+                {NppWarp<CV_32S, nppiWarpAffine_32s_C1R_Ctx>::call, 0, NppWarp<CV_32S, nppiWarpAffine_32s_C3R_Ctx>::call, NppWarp<CV_32S, nppiWarpAffine_32s_C4R_Ctx>::call},
+                {NppWarp<CV_32F, nppiWarpAffine_32f_C1R_Ctx>::call, 0, NppWarp<CV_32F, nppiWarpAffine_32f_C3R_Ctx>::call, NppWarp<CV_32F, nppiWarpAffine_32f_C4R_Ctx>::call}
             },
             {
-                {NppWarp<CV_8U, nppiWarpAffineBack_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpAffineBack_8u_C3R>::call, NppWarp<CV_8U, nppiWarpAffineBack_8u_C4R>::call},
+                {NppWarp<CV_8U, nppiWarpAffineBack_8u_C1R_Ctx>::call, 0, NppWarp<CV_8U, nppiWarpAffineBack_8u_C3R_Ctx>::call, NppWarp<CV_8U, nppiWarpAffineBack_8u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpAffineBack_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpAffineBack_16u_C3R>::call, NppWarp<CV_16U, nppiWarpAffineBack_16u_C4R>::call},
+                {NppWarp<CV_16U, nppiWarpAffineBack_16u_C1R_Ctx>::call, 0, NppWarp<CV_16U, nppiWarpAffineBack_16u_C3R_Ctx>::call, NppWarp<CV_16U, nppiWarpAffineBack_16u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpAffineBack_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpAffineBack_32s_C3R>::call, NppWarp<CV_32S, nppiWarpAffineBack_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpAffineBack_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpAffineBack_32f_C3R>::call, NppWarp<CV_32F, nppiWarpAffineBack_32f_C4R>::call}
+                {NppWarp<CV_32S, nppiWarpAffineBack_32s_C1R_Ctx>::call, 0, NppWarp<CV_32S, nppiWarpAffineBack_32s_C3R_Ctx>::call, NppWarp<CV_32S, nppiWarpAffineBack_32s_C4R_Ctx>::call},
+                {NppWarp<CV_32F, nppiWarpAffineBack_32f_C1R_Ctx>::call, 0, NppWarp<CV_32F, nppiWarpAffineBack_32f_C3R_Ctx>::call, NppWarp<CV_32F, nppiWarpAffineBack_32f_C4R_Ctx>::call}
             }
         };
 
@@ -390,20 +391,20 @@ void cv::cuda::warpPerspective(InputArray _src, OutputArray _dst, InputArray _M,
         static const func_t funcs[2][6][4] =
         {
             {
-                {NppWarp<CV_8U, nppiWarpPerspective_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpPerspective_8u_C3R>::call, NppWarp<CV_8U, nppiWarpPerspective_8u_C4R>::call},
+                {NppWarp<CV_8U, nppiWarpPerspective_8u_C1R_Ctx>::call, 0, NppWarp<CV_8U, nppiWarpPerspective_8u_C3R_Ctx>::call, NppWarp<CV_8U, nppiWarpPerspective_8u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpPerspective_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpPerspective_16u_C3R>::call, NppWarp<CV_16U, nppiWarpPerspective_16u_C4R>::call},
+                {NppWarp<CV_16U, nppiWarpPerspective_16u_C1R_Ctx>::call, 0, NppWarp<CV_16U, nppiWarpPerspective_16u_C3R_Ctx>::call, NppWarp<CV_16U, nppiWarpPerspective_16u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpPerspective_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpPerspective_32s_C3R>::call, NppWarp<CV_32S, nppiWarpPerspective_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpPerspective_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpPerspective_32f_C3R>::call, NppWarp<CV_32F, nppiWarpPerspective_32f_C4R>::call}
+                {NppWarp<CV_32S, nppiWarpPerspective_32s_C1R_Ctx>::call, 0, NppWarp<CV_32S, nppiWarpPerspective_32s_C3R_Ctx>::call, NppWarp<CV_32S, nppiWarpPerspective_32s_C4R_Ctx>::call},
+                {NppWarp<CV_32F, nppiWarpPerspective_32f_C1R_Ctx>::call, 0, NppWarp<CV_32F, nppiWarpPerspective_32f_C3R_Ctx>::call, NppWarp<CV_32F, nppiWarpPerspective_32f_C4R_Ctx>::call}
             },
             {
-                {NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C3R>::call, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C4R>::call},
+                {NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C1R_Ctx>::call, 0, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C3R_Ctx>::call, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C3R>::call, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C4R>::call},
+                {NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C1R_Ctx>::call, 0, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C3R_Ctx>::call, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C4R_Ctx>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C3R>::call, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C3R>::call, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C4R>::call}
+                {NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C1R_Ctx>::call, 0, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C3R_Ctx>::call, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C4R_Ctx>::call},
+                {NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C1R_Ctx>::call, 0, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C3R_Ctx>::call, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C4R_Ctx>::call}
             }
         };
 
