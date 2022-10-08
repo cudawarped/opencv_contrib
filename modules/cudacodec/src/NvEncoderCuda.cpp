@@ -35,7 +35,7 @@ void NvEncoderCuda::AllocateInputBuffers(int32_t numInputBuffers)
         NVENC_THROW_ERROR("Encoder intialization failed", NV_ENC_ERR_ENCODER_NOT_INITIALIZED);
     }
 
-    CUDA_DRVAPI_CALL(cuCtxPushCurrent(m_cuContext));
+    cuSafeCall(cuCtxPushCurrent(m_cuContext));
     std::vector<void*> inputFrames;
     for (int i = 0; i < numInputBuffers; i++)
     {
@@ -43,13 +43,13 @@ void NvEncoderCuda::AllocateInputBuffers(int32_t numInputBuffers)
         uint32_t chromaHeight = GetNumChromaPlanes(GetPixelFormat()) * GetChromaHeight(GetPixelFormat(), GetMaxEncodeHeight());
         if (GetPixelFormat() == NV_ENC_BUFFER_FORMAT_YV12 || GetPixelFormat() == NV_ENC_BUFFER_FORMAT_IYUV)
             chromaHeight = GetChromaHeight(GetPixelFormat(), GetMaxEncodeHeight());
-        CUDA_DRVAPI_CALL(cuMemAllocPitch((CUdeviceptr*)&pDeviceFrame,
+        cuSafeCall(cuMemAllocPitch((CUdeviceptr*)&pDeviceFrame,
             &m_cudaPitch,
             GetWidthInBytes(GetPixelFormat(), GetMaxEncodeWidth()),
             GetMaxEncodeHeight() + chromaHeight, 16));
         inputFrames.push_back((void*)pDeviceFrame);
     }
-    CUDA_DRVAPI_CALL(cuCtxPopCurrent(NULL));
+    cuSafeCall(cuCtxPopCurrent(NULL));
 
     RegisterInputResources(inputFrames,
         NV_ENC_INPUT_RESOURCE_TYPE_CUDADEVICEPTR,
@@ -127,7 +127,7 @@ void NvEncoderCuda::CopyToDeviceFrame(CUcontext device,
         NVENC_THROW_ERROR("Invalid source memory type for copy", NV_ENC_ERR_INVALID_PARAM);
     }
 
-    CUDA_DRVAPI_CALL(cuCtxPushCurrent(device));
+    cuSafeCall(cuCtxPushCurrent(device));
 
     uint32_t srcPitch = nSrcPitch ? nSrcPitch : NvEncoder::GetWidthInBytes(pixelFormat, width);
     CUDA_MEMCPY2D m = { 0 };
@@ -148,11 +148,11 @@ void NvEncoderCuda::CopyToDeviceFrame(CUcontext device,
     m.Height = height;
     if (bUnAlignedDeviceCopy && srcMemoryType == CU_MEMORYTYPE_DEVICE)
     {
-        CUDA_DRVAPI_CALL(cuMemcpy2DUnaligned(&m));
+        cuSafeCall(cuMemcpy2DUnaligned(&m));
     }
     else
     {
-        CUDA_DRVAPI_CALL(stream == NULL ? cuMemcpy2D(&m) : cuMemcpy2DAsync(&m, stream));
+        cuSafeCall(stream == NULL ? cuMemcpy2D(&m) : cuMemcpy2DAsync(&m, stream));
     }
 
     std::vector<uint32_t> srcChromaOffsets;
@@ -182,15 +182,15 @@ void NvEncoderCuda::CopyToDeviceFrame(CUcontext device,
             m.Height = chromaHeight;
             if (bUnAlignedDeviceCopy && srcMemoryType == CU_MEMORYTYPE_DEVICE)
             {
-                CUDA_DRVAPI_CALL(cuMemcpy2DUnaligned(&m));
+                cuSafeCall(cuMemcpy2DUnaligned(&m));
             }
             else
             {
-                CUDA_DRVAPI_CALL(stream == NULL ? cuMemcpy2D(&m) : cuMemcpy2DAsync(&m, stream));
+                cuSafeCall(stream == NULL ? cuMemcpy2D(&m) : cuMemcpy2DAsync(&m, stream));
             }
         }
     }
-    CUDA_DRVAPI_CALL(cuCtxPopCurrent(NULL));
+    cuSafeCall(cuCtxPopCurrent(NULL));
 }
 }}
 #endif

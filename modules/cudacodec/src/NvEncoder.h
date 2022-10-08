@@ -34,19 +34,11 @@ private:
     NVENCSTATUS m_errorCode;
 };
 
-inline NVENCException NVENCException::makeNVENCException(const std::string& errorStr, const NVENCSTATUS errorCode, const std::string& functionName,
-    const std::string& fileName, int lineNo)
-{
-    std::ostringstream errorLog;
-    errorLog << functionName << " : " << errorStr << " at " << fileName << ":" << lineNo << std::endl;
-    NVENCException exception(errorLog.str(), errorCode);
-    return exception;
-}
-
 #define NVENC_THROW_ERROR( errorStr, errorCode ) \
 do \
 { \
-throw NVENCException::makeNVENCException(errorStr, errorCode, __FUNCTION__, __FILE__, __LINE__); \
+cv::String msg = cv::format("%s [Code = %d]", errorStr, errorCode); \
+cv::error(cv::Error::GpuApiCallError, msg, __FUNCTION__, __FILE__, __LINE__); \
 } while (0)
 
 
@@ -56,9 +48,8 @@ do \
 NVENCSTATUS errorCode = nvencAPI; \
 if( errorCode != NV_ENC_SUCCESS) \
 { \
-std::ostringstream errorLog; \
-errorLog << #nvencAPI << " returned error " << unsigned(errorCode); \
-throw NVENCException::makeNVENCException(errorLog.str(), errorCode, __FUNCTION__, __FILE__, __LINE__); \
+cv::String msg = cv::format("NVENC returned error [Code = %d]", errorCode); \
+cv::error(cv::Error::GpuApiCallError, msg, __FUNCTION__, __FILE__, __LINE__); \
 } \
 } while (0)
 

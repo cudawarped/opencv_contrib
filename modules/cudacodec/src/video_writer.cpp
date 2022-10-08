@@ -163,7 +163,7 @@ int NChannels(const ENC_BUFFER_FORMAT format) {
 
 VideoWriterImpl::VideoWriterImpl(const Ptr<EncoderCallBack>& encoderCallBack_, const Size frameSz, const VideoWriterCodec codec, const double fps,
     const COLOR_FORMAT_CV surfaceFormatCv_, const EncoderParams& encoderParams_, const cuda::Stream& stream_) :
-    encoderCallBack(encoderCallBack_), surfaceFormatCv(surfaceFormatCv_), stream(stream_), encoderParams(encoderParams_)
+    encoderCallBack(encoderCallBack_), surfaceFormatCv(surfaceFormatCv_), encoderParams(encoderParams_), stream(stream_)
 {
     surfaceFormatNv = NvSurfaceFormat(surfaceFormatCv);
     if (surfaceFormatNv == BF_UNDEFINED) {
@@ -177,7 +177,7 @@ VideoWriterImpl::VideoWriterImpl(const Ptr<EncoderCallBack>& encoderCallBack_, c
 
 VideoWriterImpl::VideoWriterImpl(const Ptr<EncoderCallBack>& encoderCallBack_, const Size frameSz, const VideoWriterCodec codec, const double fps,
     const ENC_BUFFER_FORMAT surfaceFormatNv_, const EncoderParams& encoderParams_, const cuda::Stream& stream_) :
-    encoderCallBack(encoderCallBack_), surfaceFormatNv(surfaceFormatNv_), stream(stream_), encoderParams(encoderParams_)
+    encoderCallBack(encoderCallBack_), surfaceFormatNv(surfaceFormatNv_), encoderParams(encoderParams_), stream(stream_)
 {
     CV_Assert(surfaceFormatNv != BF_UNDEFINED);
     nSrcChannels = NChannels(surfaceFormatNv);
@@ -230,10 +230,11 @@ void VideoWriterImpl::Init(const VideoWriterCodec codec, const double fps, const
         const cudaStream_t cudaStream = cuda::StreamAccessor::getStream(stream);
         pEnc->SetIOCudaStreams((NV_ENC_CUSTREAM_PTR)&cudaStream, (NV_ENC_CUSTREAM_PTR)&cudaStream);
     }
-    catch (...)
+    catch (cv::Exception& e)
     {
         String msg = String("Error initializing Nvidia Encoder. Refer to Nvidia's GPU Support Matrix to confirm your GPU supports hardware encoding, ") +
-            String("codec and surface format and check the encoder documentation to verify your choice of encoding paramaters are supported.");
+            String("codec and surface format and check the encoder documentation to verify your choice of encoding paramaters are supported.") +
+            e.msg;
         CV_Error(Error::GpuApiCallError, msg);
     }
     const Size encoderFrameSz(pEnc->GetEncodeWidth(), pEnc->GetEncodeHeight());
