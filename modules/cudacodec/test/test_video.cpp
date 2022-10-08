@@ -720,9 +720,8 @@ CUDA_TEST_P(EncoderParamsCv, Writer)
         for (int i = 0; i < nFrames; ++i) {
             cap >> frame;
             ASSERT_FALSE(frame.empty());
-            if (checkGop && cap.get(CAP_PROP_FRAME_TYPE) == 73) {
+            if (checkGop && (cap.get(CAP_PROP_FRAME_TYPE) == 73))
                 ASSERT_TRUE(i % params.gopLength == 0);
-            }
         }
     }
 }

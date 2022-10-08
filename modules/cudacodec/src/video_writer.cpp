@@ -288,6 +288,12 @@ GUID EncodingPresetGuid(const ENC_PRESET nvPreset) {
     CV_Error(Error::StsUnsupportedFormat, msg);
 }
 
+bool Equal(const GUID& g1, const GUID& g2) {
+    if (std::tie(g1.Data1, g1.Data2, g1.Data3, g1.Data4) == std::tie(g2.Data1, g2.Data2, g2.Data3, g2.Data4))
+        return true;
+    return false;
+}
+
 void VideoWriterImpl::InitializeEncoder(NvEncoderCuda* const pEnc, const GUID codec, const double fps)
 {
     NV_ENC_INITIALIZE_PARAMS initializeParams = { NV_ENC_INITIALIZE_PARAMS_VER };
@@ -302,9 +308,9 @@ void VideoWriterImpl::InitializeEncoder(NvEncoderCuda* const pEnc, const GUID co
     initializeParams.encodeConfig->rcParams.maxBitRate = encoderParams.maxBitRate;
     initializeParams.encodeConfig->rcParams.targetQuality = encoderParams.targetQuality;
     initializeParams.encodeConfig->gopLength = encoderParams.gopLength;
-    if (codec == NV_ENC_CODEC_H264_GUID)
+    if (Equal(codec, NV_ENC_CODEC_H264_GUID))
         initializeParams.encodeConfig->encodeCodecConfig.h264Config.idrPeriod = encoderParams.gopLength;
-    else if (codec == NV_ENC_CODEC_HEVC_GUID)
+    else if (Equal(codec, NV_ENC_CODEC_HEVC_GUID))
         initializeParams.encodeConfig->encodeCodecConfig.hevcConfig.idrPeriod = encoderParams.gopLength;
     pEnc->CreateEncoder(&initializeParams);
 }
