@@ -379,53 +379,53 @@ EncoderParams VideoWriterImpl::getEncoderParams() const {
     return encoderParams;
 };
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const COLOR_FORMAT_CV colorFormat, const Stream& stream)
 {
     Ptr<EncoderCallBack> rawVideoWriter = new RawVideoWriter(fileName);
     return createVideoWriter(rawVideoWriter, frameSize, codec, fps, colorFormat, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const ENC_BUFFER_FORMAT bufferFormat, const Stream& stream)
 {
     Ptr<EncoderCallBack> rawVideoWriter = new RawVideoWriter(fileName);
     return createVideoWriter(rawVideoWriter, frameSize, codec, fps, bufferFormat, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const COLOR_FORMAT_CV colorFormat, const EncoderParams& params, const Stream& stream)
 {
     Ptr<EncoderCallBack> rawVideoWriter = new RawVideoWriter(fileName);
     return createVideoWriter(rawVideoWriter, frameSize, codec, fps, colorFormat, params, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const String& fileName, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const ENC_BUFFER_FORMAT bufferFormat, const EncoderParams& params, const Stream& stream)
 {
     Ptr<EncoderCallBack> rawVideoWriter = new RawVideoWriter(fileName);
     return createVideoWriter(rawVideoWriter, frameSize, codec, fps, bufferFormat, params, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const COLOR_FORMAT_CV colorFormat, const Stream& stream)
 {
     return makePtr<VideoWriterImpl>(encoderCallBack, frameSize, codec, fps, colorFormat, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const ENC_BUFFER_FORMAT bufferFormat, const Stream& stream)
 {
     return makePtr<VideoWriterImpl>(encoderCallBack, frameSize, codec, fps, bufferFormat, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const COLOR_FORMAT_CV colorFormat, const EncoderParams& params, const Stream& stream)
 {
     return makePtr<VideoWriterImpl>(encoderCallBack, frameSize, codec, fps, colorFormat, params, stream);
 }
 
-Ptr<cv::cudacodec::VideoWriter> cv::cudacodec::createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
+Ptr<VideoWriter> createVideoWriter(const Ptr<EncoderCallBack>& encoderCallBack, const Size frameSize, const VideoWriterCodec codec, const double fps,
     const ENC_BUFFER_FORMAT bufferFormat, const EncoderParams& params, const Stream& stream)
 {
     return makePtr<VideoWriterImpl>(encoderCallBack, frameSize, codec, fps, bufferFormat, params, stream);
