@@ -65,15 +65,11 @@ EncoderParams::EncoderParams() : nvPreset(ENC_PRESET_P3), tuningInfo(ENC_TUNING_
 {
 };
 
-auto tied(const EncoderParams& e)
-{
-    return std::tie(e.nvPreset, e.tuningInfo, e.encodingProfile, e.rateControlMode, e.multiPassEncoding, e.constQp.qpInterB, e.constQp.qpInterP, e.constQp.qpIntra,
-        e.averageBitRate, e.maxBitRate, e.targetQuality, e.gopLength);
-}
-
 bool operator==(const EncoderParams& lhs, const EncoderParams& rhs)
 {
-    return tied(lhs) == tied(rhs);
+    return std::tie(lhs.nvPreset, lhs.tuningInfo, lhs.encodingProfile, lhs.rateControlMode, lhs.multiPassEncoding, lhs.constQp.qpInterB, lhs.constQp.qpInterP, lhs.constQp.qpIntra,
+        lhs.averageBitRate, lhs.maxBitRate, lhs.targetQuality, lhs.gopLength) == std::tie(rhs.nvPreset, rhs.tuningInfo, rhs.encodingProfile, rhs.rateControlMode, rhs.multiPassEncoding, rhs.constQp.qpInterB, rhs.constQp.qpInterP, rhs.constQp.qpIntra,
+            rhs.averageBitRate, rhs.maxBitRate, rhs.targetQuality, rhs.gopLength);
 };
 
 class RawVideoWriter : public EncoderCallBack
@@ -127,13 +123,13 @@ private:
     void InitializeEncoder(NvEncoderCuda* const pEnc, const GUID codec, const double fps);
     void CopyToNvSurface(const InputArray src);
 
-    EncoderParams encoderParams;
-    Ptr<NvEncoderCuda> pEnc;
-    Stream stream = Stream::Null();
     Ptr<EncoderCallBack> encoderCallBack;
-    std::vector<std::vector<uint8_t>> vPacket;
     COLOR_FORMAT_CV surfaceFormatCv = COLOR_FORMAT_CV::UNDEFINED;
     ENC_BUFFER_FORMAT surfaceFormatNv = ENC_BUFFER_FORMAT::BF_UNDEFINED;
+    EncoderParams encoderParams;
+    Stream stream = Stream::Null();
+    Ptr<NvEncoderCuda> pEnc;
+    std::vector<std::vector<uint8_t>> vPacket;
     int nSrcChannels = -1;
     CUcontext cuContext;
 };

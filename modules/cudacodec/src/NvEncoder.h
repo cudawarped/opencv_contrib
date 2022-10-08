@@ -57,7 +57,7 @@ NVENCSTATUS errorCode = nvencAPI; \
 if( errorCode != NV_ENC_SUCCESS) \
 { \
 std::ostringstream errorLog; \
-errorLog << #nvencAPI << " returned error " << errorCode; \
+errorLog << #nvencAPI << " returned error " << unsigned(errorCode); \
 throw NVENCException::makeNVENCException(errorLog.str(), errorCode, __FUNCTION__, __FILE__, __LINE__); \
 } \
 } while (0)
@@ -388,18 +388,18 @@ protected:
     int32_t m_nOutputDelay = 0;
 
 private:
-    uint32_t m_nWidth;
-    uint32_t m_nHeight;
-    NV_ENC_BUFFER_FORMAT m_eBufferFormat;
     void* m_pDevice;
     NV_ENC_DEVICE_TYPE m_eDeviceType;
+    uint32_t m_nWidth;
+    uint32_t m_nHeight;
+    uint32_t m_nMaxEncodeWidth = 0;
+    uint32_t m_nMaxEncodeHeight = 0;
+    NV_ENC_BUFFER_FORMAT m_eBufferFormat;
     NV_ENC_INITIALIZE_PARAMS m_initializeParams = {};
     NV_ENC_CONFIG m_encodeConfig = {};
     bool m_bEncoderInitialized = false;
     uint32_t m_nExtraOutputDelay = 3; // To ensure encode and graphics can work in parallel, m_nExtraOutputDelay should be set to at least 1
     std::vector<NV_ENC_OUTPUT_PTR> m_vBitstreamOutputBuffer;
-    uint32_t m_nMaxEncodeWidth = 0;
-    uint32_t m_nMaxEncodeHeight = 0;
 };
 }}
 #endif

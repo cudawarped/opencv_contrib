@@ -133,6 +133,7 @@ PERF_TEST_P(WriteToFile, VideoWriter, Combine(VIDEO_SRC, COLOR_FORMAT, CODEC))
             break;
         case cudacodec::COLOR_FORMAT_CV::GRAY:
             conversionCode = COLOR_BGR2GRAY;
+        default:
             break;
         }
         for (int i = 0; i < nFrames; i++) {

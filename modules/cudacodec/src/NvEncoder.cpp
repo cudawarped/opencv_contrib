@@ -20,6 +20,7 @@ static inline bool operator!=(const GUID& guid1, const GUID& guid2) {
 
 NvEncoder::NvEncoder(NV_ENC_DEVICE_TYPE eDeviceType, void* pDevice, uint32_t nWidth, uint32_t nHeight, NV_ENC_BUFFER_FORMAT eBufferFormat,
     uint32_t nExtraOutputDelay) :
+    m_hEncoder(nullptr),
     m_pDevice(pDevice),
     m_eDeviceType(eDeviceType),
     m_nWidth(nWidth),
@@ -27,8 +28,7 @@ NvEncoder::NvEncoder(NV_ENC_DEVICE_TYPE eDeviceType, void* pDevice, uint32_t nWi
     m_nMaxEncodeWidth(nWidth),
     m_nMaxEncodeHeight(nHeight),
     m_eBufferFormat(eBufferFormat),
-    m_nExtraOutputDelay(nExtraOutputDelay),
-    m_hEncoder(nullptr)
+    m_nExtraOutputDelay(nExtraOutputDelay)
 {
     LoadNvEncApi();
 

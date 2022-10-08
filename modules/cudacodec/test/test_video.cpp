@@ -144,7 +144,7 @@ CUDA_TEST_P(CheckExtraData, Reader)
     ASSERT_TRUE(reader->grab());
     cv::Mat extraData;
     const bool newData = reader->retrieve(extraData, extraDataIdx);
-    ASSERT_TRUE(newData && sz || !newData && !sz);
+    ASSERT_TRUE((newData && sz) || (!newData && !sz));
     ASSERT_EQ(extraData.total(), sz);
 }
 
@@ -174,7 +174,7 @@ CUDA_TEST_P(CheckKeyFrame, Reader)
             nPackages++;
             double containsKeyFrame = i;
             ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_LRF_HAS_KEY_FRAME, containsKeyFrame));
-            ASSERT_TRUE(nPackages == 1 && containsKeyFrame || nPackages == 2 && !containsKeyFrame) << "nPackage: " << i;
+            ASSERT_TRUE((nPackages == 1 && containsKeyFrame) || (nPackages == 2 && !containsKeyFrame)) << "nPackage: " << i;
             if (nPackages >= maxNPackagesToCheck)
                 break;
         }
@@ -644,8 +644,15 @@ cv::cudacodec::COLOR_FORMAT_CV::RGBA, cv::cudacodec::COLOR_FORMAT_CV::GRAY
 INSTANTIATE_TEST_CASE_P(CUDA_Codec, WriteCv, testing::Combine(ALL_DEVICES, testing::Values(DEVICE_SRC), testing::Values(CODEC), testing::Values(FPS),
     testing::Values(SURFACE_FORMAT_CV)));
 
+//auto tied(const cv::cudacodec::EncoderParams& e)
+//{
+//    return std::tie(e.nvPreset, e.tuningInfo, e.encodingProfile, e.rateControlMode, e.multiPassEncoding, e.constQp.qpInterB, e.constQp.qpInterP, e.constQp.qpIntra,
+//        e.averageBitRate, e.maxBitRate, e.targetQuality, e.gopLength);
+//}
+//
+//bool operator==(const cv::cudacodec::EncoderParams& lhs, const cv::cudacodec::EncoderParams& rhs) { tied(lhs) == tied(rhs); }
 
-struct EncoderParams : testing::TestWithParam<cv::cuda::DeviceInfo>
+struct EncoderParamsBase : testing::TestWithParam<cv::cuda::DeviceInfo>
 {
     cv::cuda::DeviceInfo devInfo;
     cv::cudacodec::EncoderParams params;
@@ -666,7 +673,7 @@ struct EncoderParams : testing::TestWithParam<cv::cuda::DeviceInfo>
     }
 };
 
-struct EncoderParamsCv : EncoderParams
+struct EncoderParamsCv : EncoderParamsBase
 {
 };
 
@@ -713,15 +720,16 @@ CUDA_TEST_P(EncoderParamsCv, Writer)
         for (int i = 0; i < nFrames; ++i) {
             cap >> frame;
             ASSERT_FALSE(frame.empty());
-            if (checkGop && cap.get(CAP_PROP_FRAME_TYPE) == 73)
+            if (checkGop && cap.get(CAP_PROP_FRAME_TYPE) == 73) {
                 ASSERT_TRUE(i % params.gopLength == 0);
+            }
         }
     }
 }
 
 INSTANTIATE_TEST_CASE_P(CUDA_Codec, EncoderParamsCv, ALL_DEVICES);
 
-struct EncoderParamsNv : EncoderParams
+struct EncoderParamsNv : EncoderParamsBase
 {
 };
 
