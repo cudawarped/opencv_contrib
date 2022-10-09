@@ -89,13 +89,12 @@ class cudacodec_test(NewOpenCVTests):
             blankFrameIn = cv.cuda.GpuMat(sz,cv.CV_8UC3)
             writer.write(blankFrameIn)
             writer.close()
-
             encoder_params_out = writer.getEncoderParams()
             self.assert_true(encoder_params_in.gopLength == encoder_params_out.gopLength)
             cap = cv.VideoCapture(fname,cv.CAP_FFMPEG)
             self.assert_true(cap.isOpened())
             ret, blankFrameOut = cap.read()
-            self.assert_true(ret)
+            self.assert_true(ret and blankFrameOut.shape == blankFrameIn.download().shape)
         except cv.error as e:
             self.assertEqual(e.code, cv.Error.StsNotImplemented)
             self.skipTest("Either NVCUVENC or a GPU hardware encoder is missing or the encoding profile is not supported.")
