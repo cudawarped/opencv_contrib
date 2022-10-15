@@ -128,8 +128,8 @@ namespace cv { namespace cuda { namespace device
                                     bool correct_gamma,
                                     const cudaStream_t& stream);
 
-        void resize_8UC1(const cv::cuda::PtrStepSzb& src, cv::cuda::PtrStepSzb dst);
-        void resize_8UC4(const cv::cuda::PtrStepSzb& src, cv::cuda::PtrStepSzb dst);
+        void resize_8UC1(const cv::cuda::GpuMat& src, cv::cuda::PtrStepSzb dst);
+        void resize_8UC4(const cv::cuda::GpuMat& src, cv::cuda::PtrStepSzb dst);
     }
 }}}
 
