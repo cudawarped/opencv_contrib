@@ -124,7 +124,8 @@ template <typename T> struct Texture : TexturePtr<T>
     __host__ explicit Texture(const GlobPtrSz<T>& mat,
                               bool normalizedCoords = false,
                               cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                              cudaTextureAddressMode addressMode = cudaAddressModeClamp)
+                              cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                              cudaTextureReadMode readMode = cudaReadModeElementType)
     {
         cc30 = deviceSupports(FEATURE_SET_COMPUTE_30);
 
@@ -150,7 +151,7 @@ template <typename T> struct Texture : TexturePtr<T>
             texDescr.addressMode[0] = addressMode;
             texDescr.addressMode[1] = addressMode;
             texDescr.addressMode[2] = addressMode;
-            texDescr.readMode = cudaReadModeElementType;
+            texDescr.readMode = readMode;
 
             CV_CUDEV_SAFE_CALL( cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0) );
         }
