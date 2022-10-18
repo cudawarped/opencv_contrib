@@ -49,6 +49,7 @@
 #include "opencv2/core/cuda/vec_math.hpp"
 #include "opencv2/core/cuda/saturate_cast.hpp"
 #include "opencv2/core/cuda/filters.hpp"
+#include "opencv2/cudev.hpp"
 
 namespace cv { namespace cuda { namespace device
 {
@@ -130,53 +131,22 @@ namespace cv { namespace cuda { namespace device
         }
     }
 
-    // textures
-
-    template <typename T> struct TextureAccessor;
-
-    #define OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(type) \
-        texture<type, cudaTextureType2D, cudaReadModeElementType> tex_resize_##type (0, cudaFilterModePoint, cudaAddressModeClamp); \
-        template <> struct TextureAccessor<type> \
-        { \
-            typedef type elem_type; \
-            typedef int index_type; \
-            int xoff; \
-            int yoff; \
-            __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const \
-            { \
-                return tex2D(tex_resize_##type, x + xoff, y + yoff); \
-            } \
-            __host__ static void bind(const PtrStepSz<type>& mat) \
-            { \
-                bindTexture(&tex_resize_##type, mat); \
-            } \
-        };
-
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(uchar)
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(uchar4)
-
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(ushort)
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(ushort4)
-
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(short)
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(short4)
-
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(float)
-    OPENCV_CUDA_IMPLEMENT_RESIZE_TEX(float4)
-
-    #undef OPENCV_CUDA_IMPLEMENT_RESIZE_TEX
-
-    template <typename T>
-    TextureAccessor<T> texAccessor(const PtrStepSz<T>& mat, int yoff, int xoff)
+    template <class T> struct TextureAccessor
     {
-        TextureAccessor<T>::bind(mat);
+        TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
+            tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
 
-        TextureAccessor<T> t;
-        t.xoff = xoff;
-        t.yoff = yoff;
+        __device__ __forceinline__ T operator ()(index_type y, index_type x) const
+        {
+            return tex(y + yoff, x + xoff);
+        }
 
-        return t;
-    }
+        cv::cudev::Texture<T> tex;
+        typedef T elem_type;
+        typedef int index_type;
+        int yoff;
+        int xoff;
+    };
 
     // callers for nearest interpolation
 
@@ -198,8 +168,8 @@ namespace cv { namespace cuda { namespace device
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-
-        resize<<<grid, block>>>(texAccessor(srcWhole, yoff, xoff), dst, fy, fx);
+        TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+        resize<<<grid, block>>>(texSrcWhole, dst, fy, fx);
         cudaSafeCall( cudaGetLastError() );
 
         cudaSafeCall( cudaDeviceSynchronize() );
@@ -228,17 +198,16 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            TextureAccessor<T> texSrc = texAccessor(src, 0, 0);
+            TextureAccessor<T> texSrc(src, 0, 0);
             LinearFilter< TextureAccessor<T> > filteredSrc(texSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureAccessor<T> texSrc = texAccessor(srcWhole, yoff, xoff);
-
+            TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrc, brd);
+            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
             LinearFilter< BorderReader<TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
@@ -276,17 +245,16 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            TextureAccessor<T> texSrc = texAccessor(src, 0, 0);
+            TextureAccessor<T> texSrc(src, 0, 0);
             CubicFilter< TextureAccessor<T> > filteredSrc(texSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureAccessor<T> texSrc = texAccessor(srcWhole, yoff, xoff);
-
+            TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrc, brd);
+            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
             CubicFilter< BorderReader<TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
