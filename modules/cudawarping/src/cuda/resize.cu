@@ -166,8 +166,8 @@ namespace cv { namespace cuda { namespace device
         int yoff;
         __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
     {
-            //return tex(x + xoff, y + yoff);
-            return tex(y + yoff, x + xoff);
+            return tex(x + xoff, y + yoff);
+            //return tex(y + yoff, x + xoff);
         //return tex2D(tex_resize_##type, x + xoff, y + yoff);
     }
     //    __host__ static void bind(const PtrStepSz<T>& mat)
