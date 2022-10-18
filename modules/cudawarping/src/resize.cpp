@@ -51,14 +51,14 @@ void cv::cuda::resize(InputArray, OutputArray, Size, double, double, int, Stream
 namespace cv { namespace cuda { namespace device
 {
     template <typename T>
-    void resize(const GpuMat& src, const GpuMat& srcWhole, int yoff, int xoff, const PtrStepSzb& dst, float fy, float fx, int interpolation, cudaStream_t stream);
+    void resize(const PtrStepSzb& src, const PtrStepSzb& srcWhole, int yoff, int xoff, const PtrStepSzb& dst, float fy, float fx, int interpolation, cudaStream_t stream);
 }}}
 
 void cv::cuda::resize(InputArray _src, OutputArray _dst, Size dsize, double fx, double fy, int interpolation, Stream& stream)
 {
     GpuMat src = _src.getGpuMat();
 
-    typedef void (*func_t)(const GpuMat& src, const GpuMat& srcWhole, int yoff, int xoff, const PtrStepSzb& dst, float fy, float fx, int interpolation, cudaStream_t stream);
+    typedef void (*func_t)(const PtrStepSzb& src, const PtrStepSzb& srcWhole, int yoff, int xoff, const PtrStepSzb& dst, float fy, float fx, int interpolation, cudaStream_t stream);
     static const func_t funcs[6][4] =
     {
         {device::resize<uchar>      , 0 /*device::resize<uchar2>*/ , device::resize<uchar3>     , device::resize<uchar4>     },
@@ -100,8 +100,7 @@ void cv::cuda::resize(InputArray _src, OutputArray _dst, Size dsize, double fx, 
     Size wholeSize;
     Point ofs;
     src.locateROI(wholeSize, ofs);
-    //cv::cudev::GpuMat_<T> wholeSrc(wholeSize, src.datastart, src.step);
-    GpuMat wholeSrc;
+    PtrStepSzb wholeSrc(wholeSize.height, wholeSize.width, src.datastart, src.step);
 
     func(src, wholeSrc, ofs.y, ofs.x, dst, static_cast<float>(1.0 / fy), static_cast<float>(1.0 / fx), interpolation, StreamAccessor::getStream(stream));
 }
