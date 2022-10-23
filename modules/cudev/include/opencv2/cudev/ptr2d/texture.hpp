@@ -51,7 +51,9 @@
 #include "glob.hpp"
 #include "gpumat.hpp"
 #include "traits.hpp"
+#include <opencv2/core/cuda/vec_traits.hpp>
 
+// previous to sdk 5 compute 3 wasn't supported so this would fail, this allows building sdk5 for compute 2? must be some minor version issue in sdk 5?
 #if CUDART_VERSION >= 5050
 
 namespace
@@ -90,170 +92,232 @@ namespace
 
 #endif
 
-namespace cv { namespace cudev {
+namespace cv {
+    namespace cudev {
 
-//! @addtogroup cudev
-//! @{
+        //! @addtogroup cudev
+        //! @{
 
 #if CUDART_VERSION >= 5050
 
-template <typename T> struct TexturePtr
-{
-    typedef T     value_type;
-    typedef float index_type;
-
-    cudaTextureObject_t texObj;
-
-    __device__ __forceinline__ T operator ()(float y, float x) const
-    {
-    #if CV_CUDEV_ARCH < 300
-        // Use the texture reference
-        return tex2D(CvCudevTextureRef<T>::ref, x, y);
-    #else
-        // Use the texture object
-        return tex2D<T>(texObj, x, y);
-    #endif
-    }
-};
-
-template <typename T> struct Texture : TexturePtr<T>
-{
-    int rows, cols;
-    bool cc30;
-
-    __host__ explicit Texture(const GlobPtrSz<T>& mat,
-                              bool normalizedCoords = false,
-                              cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                              cudaTextureAddressMode addressMode = cudaAddressModeClamp,
-                              cudaTextureReadMode readMode = cudaReadModeElementType)
-    {
-        cc30 = deviceSupports(FEATURE_SET_COMPUTE_30);
-
-        rows = mat.rows;
-        cols = mat.cols;
-
-        if (cc30)
+        template <typename T, typename R = T> struct TexturePtr
         {
-            // Use the texture object
-            cudaResourceDesc texRes;
-            std::memset(&texRes, 0, sizeof(texRes));
-            texRes.resType = cudaResourceTypePitch2D;
-            texRes.res.pitch2D.devPtr = mat.data;
-            texRes.res.pitch2D.height = mat.rows;
-            texRes.res.pitch2D.width = mat.cols;
-            texRes.res.pitch2D.pitchInBytes = mat.step;
-            texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
+            typedef T     value_type;
+            typedef float index_type;
 
-            cudaTextureDesc texDescr;
-            std::memset(&texDescr, 0, sizeof(texDescr));
-            texDescr.normalizedCoords = normalizedCoords;
-            texDescr.filterMode = filterMode;
-            texDescr.addressMode[0] = addressMode;
-            texDescr.addressMode[1] = addressMode;
-            texDescr.addressMode[2] = addressMode;
-            texDescr.readMode = readMode;
+            cudaTextureObject_t texObj;
 
-            CV_CUDEV_SAFE_CALL( cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0) );
-        }
-        else
+            __device__ __forceinline__ R operator ()(float y, float x) const
+            {
+#if CV_CUDEV_ARCH < 300
+                // Use the texture reference
+                return tex2D(CvCudevTextureRef<T>::ref, x, y);
+#else
+                // Use the texture object
+                return tex2D<R>(texObj, x, y);
+#endif
+            }
+        };
+
+        template <typename T, typename R = T> struct Texture : TexturePtr<T, R>
         {
-            // Use the texture reference
-            CvCudevTextureRef<T>::bind(mat, normalizedCoords, filterMode, addressMode);
-        }
-    }
+            int rows, cols;
+            bool cc30;
 
-    __host__ ~Texture()
-    {
-        if (cc30)
-        {
-            // Use the texture object
-            cudaDestroyTextureObject(this->texObj);
-        }
-        else
-        {
-            // Use the texture reference
-            CvCudevTextureRef<T>::unbind();
-        }
-    }
-};
+            __host__ explicit Texture(const GlobPtrSz<T>& mat,
+                bool normalizedCoords = false,
+                cudaTextureFilterMode filterMode = cudaFilterModePoint,
+                cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                cudaTextureReadMode readMode = cudaReadModeElementType)
+            {
+                rows = mat.rows;
+                cols = mat.cols;
+#if !defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 300)
+                //cc30 = deviceSupports(FEATURE_SET_COMPUTE_30);
 
-template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
-{
-};
+
+
+                //if (cc30)
+                //{
+                    // Use the texture object
+                cudaResourceDesc texRes;
+                std::memset(&texRes, 0, sizeof(texRes));
+                texRes.resType = cudaResourceTypePitch2D;
+                texRes.res.pitch2D.devPtr = mat.data;
+                texRes.res.pitch2D.height = mat.rows;
+                texRes.res.pitch2D.width = mat.cols;
+                texRes.res.pitch2D.pitchInBytes = mat.step;
+                texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
+
+                cudaTextureDesc texDescr;
+                std::memset(&texDescr, 0, sizeof(texDescr));
+                texDescr.normalizedCoords = normalizedCoords;
+                texDescr.filterMode = filterMode;
+                texDescr.addressMode[0] = addressMode;
+                texDescr.addressMode[1] = addressMode;
+                texDescr.addressMode[2] = addressMode;
+                texDescr.readMode = readMode;
+
+                CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0));
+                //}
+                //else
+                //{
+#else
+                // Use the texture reference
+                CvCudevTextureRef<T>::bind(mat, normalizedCoords, filterMode, addressMode);
+#endif
+                //}
+            }
+
+            __host__ ~Texture()
+            {
+                if (cc30)
+                {
+                    // Use the texture object
+                    cudaDestroyTextureObject(this->texObj);
+                }
+                else
+                {
+                    // Use the texture reference
+                    CvCudevTextureRef<T>::unbind();
+                }
+            }
+        };
+
+        template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
+        {
+        };
 
 #else
 
-template <typename T> struct TexturePtr
-{
-    typedef T     value_type;
-    typedef float index_type;
+        template <typename T> struct TexturePtr
+        {
+            typedef T     value_type;
+            typedef float index_type;
 
-    cudaTextureObject_t texObj;
+            cudaTextureObject_t texObj;
 
-    __device__ __forceinline__ T operator ()(float y, float x) const
-    {
-    #if CV_CUDEV_ARCH >= 300
-        // Use the texture object
-        return tex2D<T>(texObj, x, y);
-    #else
-        CV_UNUSED(y);
-        CV_UNUSED(x);
-        return T();
-    #endif
-    }
-};
+            __device__ __forceinline__ T operator ()(float y, float x) const
+            {
+#if CV_CUDEV_ARCH >= 300
+                // Use the texture object
+                return tex2D<T>(texObj, x, y);
+#else
+                CV_UNUSED(y);
+                CV_UNUSED(x);
+                return T();
+#endif
+            }
+        };
 
-template <typename T> struct Texture : TexturePtr<T>
-{
-    int rows, cols;
+        template <typename T> struct Texture : TexturePtr<T>
+        {
+            int rows, cols;
 
-    __host__ explicit Texture(const GlobPtrSz<T>& mat,
-                              bool normalizedCoords = false,
-                              cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                              cudaTextureAddressMode addressMode = cudaAddressModeClamp)
-    {
-        CV_Assert( deviceSupports(FEATURE_SET_COMPUTE_30) );
+            __host__ explicit Texture(const GlobPtrSz<T>& mat,
+                bool normalizedCoords = false,
+                cudaTextureFilterMode filterMode = cudaFilterModePoint,
+                cudaTextureAddressMode addressMode = cudaAddressModeClamp)
+            {
+                CV_Assert(deviceSupports(FEATURE_SET_COMPUTE_30));
 
-        rows = mat.rows;
-        cols = mat.cols;
+                rows = mat.rows;
+                cols = mat.cols;
 
-        // Use the texture object
-        cudaResourceDesc texRes;
-        std::memset(&texRes, 0, sizeof(texRes));
-        texRes.resType = cudaResourceTypePitch2D;
-        texRes.res.pitch2D.devPtr = mat.data;
-        texRes.res.pitch2D.height = mat.rows;
-        texRes.res.pitch2D.width = mat.cols;
-        texRes.res.pitch2D.pitchInBytes = mat.step;
-        texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
+                // Use the texture object
+                cudaResourceDesc texRes;
+                std::memset(&texRes, 0, sizeof(texRes));
+                texRes.resType = cudaResourceTypePitch2D;
+                texRes.res.pitch2D.devPtr = mat.data;
+                texRes.res.pitch2D.height = mat.rows;
+                texRes.res.pitch2D.width = mat.cols;
+                texRes.res.pitch2D.pitchInBytes = mat.step;
+                texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
 
-        cudaTextureDesc texDescr;
-        std::memset(&texDescr, 0, sizeof(texDescr));
-        texDescr.normalizedCoords = normalizedCoords;
-        texDescr.filterMode = filterMode;
-        texDescr.addressMode[0] = addressMode;
-        texDescr.addressMode[1] = addressMode;
-        texDescr.addressMode[2] = addressMode;
-        texDescr.readMode = cudaReadModeElementType;
+                cudaTextureDesc texDescr;
+                std::memset(&texDescr, 0, sizeof(texDescr));
+                texDescr.normalizedCoords = normalizedCoords;
+                texDescr.filterMode = filterMode;
+                texDescr.addressMode[0] = addressMode;
+                texDescr.addressMode[1] = addressMode;
+                texDescr.addressMode[2] = addressMode;
+                texDescr.readMode = cudaReadModeElementType;
 
-        CV_CUDEV_SAFE_CALL( cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0) );
-    }
+                CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0));
+            }
 
-    __host__ ~Texture()
-    {
-        // Use the texture object
-        cudaDestroyTextureObject(this->texObj);
-    }
-};
+            __host__ ~Texture()
+            {
+                // Use the texture object
+                cudaDestroyTextureObject(this->texObj);
+            }
+        };
 
-template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
-{
-};
+        template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
+        {
+        };
 
 #endif
 
-//! @}
+        //! @}
 
-}}
+
+
+
+        template <class T> struct TextureAccessor
+        {
+            TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
+                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
+
+            Texture<T> tex;
+            typedef T elem_type;
+            typedef int index_type;
+            int yoff;
+            int xoff;
+
+            __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
+            {
+                return tex(y + yoff, x + xoff);
+            }
+        };
+
+    }
+
+    //namespace cuda { // wrong namespace, should be in its own file? TypeVec is device and this is cudev?
+    //    namespace device {
+    //        template <int cn, typename T, typename R>  struct TextureAccessor
+    //        {
+    //            typedef TypeVec<T, cn>::vec_type elem_type;
+    //            typedef TypeVec<R, cn>::vec_type ret_type;
+    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
+    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp) {};
+    //            //TextureAccessor(const PtrStepSz<elem_type>& src) : TextureAccessor
+    //            //    tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
+    //            cv::cudev::Texture <elem_type, ret_type> tex;
+    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
+    //        };
+
+    //        template <int cn, typename T> struct TextureAccessor<cn, T, float> {
+    //            typedef TypeVec<T, cn>::vec_type elem_type;
+    //            typedef TypeVec<float, cn>::vec_type ret_type;
+    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
+    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
+    //            cv::cudev::Texture <elem_type, ret_type> tex;
+    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
+    //        };
+
+    //        template <int cn> struct TextureAccessor<cn, float, float> {
+    //            typedef TypeVec<float, cn>::vec_type elem_type;
+    //            typedef TypeVec<float, cn>::vec_type ret_type;
+    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
+    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp) {};
+    //            cv::cudev::Texture <elem_type, ret_type> tex;
+    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
+    //        };
+    //    }
+    //}
+
+
+}
 
 #endif
