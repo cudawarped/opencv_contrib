@@ -48,6 +48,7 @@
 #include "opencv2/core/cuda/vec_math.hpp"
 #include "opencv2/core/cuda/saturate_cast.hpp"
 #include "opencv2/core/cuda/filters.hpp"
+#include "opencv2/cudev/ptr2d/texture.hpp"
 
 namespace cv { namespace cuda { namespace device
 {
@@ -196,86 +197,56 @@ namespace cv { namespace cuda { namespace device
             }
         };
 
-        #define OPENCV_CUDA_IMPLEMENT_WARP_TEX(type) \
-            texture< type , cudaTextureType2D > tex_warp_ ## type (0, cudaFilterModePoint, cudaAddressModeClamp); \
-            struct tex_warp_ ## type ## _reader \
-            { \
-                typedef type elem_type; \
-                typedef int index_type; \
-                int xoff, yoff; \
-                tex_warp_ ## type ## _reader (int xoff_, int yoff_) : xoff(xoff_), yoff(yoff_) {} \
-                __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const \
-                { \
-                    return tex2D(tex_warp_ ## type , x + xoff, y + yoff); \
-                } \
-            }; \
-            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, type> \
-            { \
-                static void call(PtrStepSz< type > src, PtrStepSz< type > srcWhole, int xoff, int yoff, PtrStepSz< type > dst, const float* borderValue, const float warpMat[Transform::rows*3], bool cc20) \
-                { \
-                    typedef typename TypeVec<float, VecTraits< type >::cn>::vec_type work_type; \
-                    dim3 block(32, cc20 ? 8 : 4); \
-                    dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y)); \
-                    bindTexture(&tex_warp_ ## type , srcWhole); \
-                    tex_warp_ ## type ##_reader texSrc(xoff, yoff); \
-                    B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue)); \
-                    BorderReader< tex_warp_ ## type ##_reader, B<work_type> > brdSrc(texSrc, brd); \
-                    Filter< BorderReader< tex_warp_ ## type ##_reader, B<work_type> > > filter_src(brdSrc); \
-                    warp<Transform><<<grid, block>>>(filter_src, dst, warpMat); \
-                    cudaSafeCall( cudaGetLastError() ); \
-                    cudaSafeCall( cudaDeviceSynchronize() ); \
-                } \
-            }; \
-            template <class Transform, template <typename> class Filter> struct WarpDispatcherNonStream<Transform, Filter, BrdReplicate, type> \
-            { \
-                static void call(PtrStepSz< type > src, PtrStepSz< type > srcWhole, int xoff, int yoff, PtrStepSz< type > dst, const float*, const float warpMat[Transform::rows*3], bool) \
-                { \
-                    dim3 block(32, 8); \
-                    dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y)); \
-                    bindTexture(&tex_warp_ ## type , srcWhole); \
-                    tex_warp_ ## type ##_reader texSrc(xoff, yoff); \
-                    if (srcWhole.cols == src.cols && srcWhole.rows == src.rows) \
-                    { \
-                        Filter< tex_warp_ ## type ##_reader > filter_src(texSrc); \
-                        warp<Transform><<<grid, block>>>(filter_src, dst, warpMat); \
-                    } \
-                    else \
-                    { \
-                        BrdReplicate<type> brd(src.rows, src.cols); \
-                        BorderReader< tex_warp_ ## type ##_reader, BrdReplicate<type> > brdSrc(texSrc, brd); \
-                        Filter< BorderReader< tex_warp_ ## type ##_reader, BrdReplicate<type> > > filter_src(brdSrc); \
-                        warp<Transform><<<grid, block>>>(filter_src, dst, warpMat); \
-                    } \
-                    cudaSafeCall( cudaGetLastError() ); \
-                    cudaSafeCall( cudaDeviceSynchronize() ); \
-                } \
+            //template <class T> struct TextureAccessor
+            //{
+            //    TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
+            //        tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
+
+            //    cv::cudev::Texture<T> tex;
+            //    typedef T elem_type;
+            //    typedef int index_type;
+            //    int yoff;
+            //    int xoff;
+
+            //    __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
+            //    {
+            //        return tex(y + yoff, x + xoff);
+            //    }
+            //};
+
+            template <class Transform, template <typename> class Filter, template <typename> class B, typename T> struct WarpDispatcherNonStreamTex
+            {
+                static void call(PtrStepSz<T> src, PtrStepSz<T> srcWhole, int xoff, int yoff, PtrStepSz<T> dst, const float* borderValue, const float warpMat[Transform::rows*3], bool cc20)
+                {
+                    typedef typename TypeVec<float, VecTraits<T>::cn>::vec_type work_type;
+                    dim3 block(32, cc20 ? 8 : 4);
+                    dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
+                    cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+                    B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
+                    BorderReader< cudev::TextureAccessor<T>, B<work_type> > brdSrc(texSrcWhole, brd);
+                    Filter< BorderReader< cudev::TextureAccessor<T>, B<work_type> > > filter_src(brdSrc);
+                    warp<Transform><<<grid, block>>>(filter_src, dst, warpMat);
+                    cudaSafeCall( cudaGetLastError() );
+                    cudaSafeCall( cudaDeviceSynchronize() );
+                }
             };
 
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(uchar)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(uchar2)
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(uchar4)
-
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(schar)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(char2)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(char4)
-
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(ushort)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(ushort2)
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(ushort4)
-
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(short)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(short2)
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(short4)
-
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(int)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(int2)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(int4)
-
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(float)
-        //OPENCV_CUDA_IMPLEMENT_WARP_TEX(float2)
-        OPENCV_CUDA_IMPLEMENT_WARP_TEX(float4)
-
-        #undef OPENCV_CUDA_IMPLEMENT_WARP_TEX
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, uchar> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, uchar> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, uchar4> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, uchar4> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, ushort> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, ushort> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, ushort4> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, ushort4> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, short> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, short> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, short4> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, short4> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, float> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, float> {};
+            template <class Transform, template <typename> class Filter, template <typename> class B> struct WarpDispatcherNonStream<Transform, Filter, B, float4> :
+                WarpDispatcherNonStreamTex<Transform, Filter, B, float4> {};
 
         template <class Transform, template <typename> class Filter, template <typename> class B, typename T> struct WarpDispatcher
         {

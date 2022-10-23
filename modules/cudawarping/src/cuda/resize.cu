@@ -131,22 +131,22 @@ namespace cv { namespace cuda { namespace device
         }
     }
 
-    template <class T> struct TextureAccessor
-    {
-        TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
-            tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
+    //template <class T> struct TextureAccessor
+    //{
+    //    TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
+    //        tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
 
-        __device__ __forceinline__ T operator ()(index_type y, index_type x) const
-        {
-            return tex(y + yoff, x + xoff);
-        }
+    //    cv::cudev::Texture<T> tex;
+    //    typedef T elem_type;
+    //    typedef int index_type;
+    //    int yoff;
+    //    int xoff;
 
-        cv::cudev::Texture<T> tex;
-        typedef T elem_type;
-        typedef int index_type;
-        int yoff;
-        int xoff;
-    };
+    //    __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
+    //    {
+    //        return tex(y + yoff, x + xoff);
+    //    }
+    //};
 
     // callers for nearest interpolation
 
@@ -168,7 +168,7 @@ namespace cv { namespace cuda { namespace device
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-        TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+        cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
         resize<<<grid, block>>>(texSrcWhole, dst, fy, fx);
         cudaSafeCall( cudaGetLastError() );
 
@@ -198,17 +198,17 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            TextureAccessor<T> texSrc(src, 0, 0);
-            LinearFilter< TextureAccessor<T> > filteredSrc(texSrc);
+            cudev::TextureAccessor<T> texSrc(src, 0, 0);
+            LinearFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            LinearFilter< BorderReader<TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
+            BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            LinearFilter< BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
@@ -245,17 +245,17 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            TextureAccessor<T> texSrc(src, 0, 0);
-            CubicFilter< TextureAccessor<T> > filteredSrc(texSrc);
+            cudev::TextureAccessor<T> texSrc(src, 0, 0);
+            CubicFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            CubicFilter< BorderReader<TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
+            BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            CubicFilter< BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
 
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
@@ -283,10 +283,10 @@ namespace cv { namespace cuda { namespace device
                 call_resize_nearest_glob(src, dst, fy, fx, stream);
             else
             {
-                if (fx > 1 || fy > 1)
+                //if (fx > 1 || fy > 1)
                     call_resize_nearest_glob(src, dst, fy, fx, 0);
-                else
-                    call_resize_nearest_tex(src, srcWhole, yoff, xoff, dst, fy, fx);
+                //else
+                //    call_resize_nearest_tex(src, srcWhole, yoff, xoff, dst, fy, fx);
             }
         }
     };
@@ -357,7 +357,7 @@ namespace cv { namespace cuda { namespace device
         {
             if (stream)
                 call_resize_cubic_glob(src, dst, fy, fx, stream);
-            else
+           else
                 call_resize_cubic_tex(src, srcWhole, yoff, xoff, dst, fy, fx);
         }
     };
