@@ -168,8 +168,14 @@ namespace cv { namespace cuda { namespace device
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-        cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
-        resize<<<grid, block>>>(texSrcWhole, dst, fy, fx);
+        if (xoff || yoff) {
+            cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
+            resize << <grid, block >> > (texSrcWhole, dst, fy, fx);
+        }
+        else {
+            cudev::TextureAccessor<T> texSrcWhole(srcWhole);
+            resize << <grid, block >> > (texSrcWhole, dst, fy, fx);
+        }
         cudaSafeCall( cudaGetLastError() );
 
         cudaSafeCall( cudaDeviceSynchronize() );
@@ -198,18 +204,16 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            cudev::TextureAccessor<T> texSrc(src, 0, 0);
+            cudev::TextureAccessor<T> texSrc(src);
             LinearFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
-
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            LinearFilter< BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
-
+            BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            LinearFilter< BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
 
@@ -245,18 +249,16 @@ namespace cv { namespace cuda { namespace device
 
         if (srcWhole.data == src.data)
         {
-            cudev::TextureAccessor<T> texSrc(src, 0, 0);
+            cudev::TextureAccessor<T> texSrc(src);
             CubicFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
-
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
         else
         {
-            cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            CubicFilter< BorderReader<cudev::TextureAccessor<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
-
+            BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            CubicFilter< BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
             resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
         }
 

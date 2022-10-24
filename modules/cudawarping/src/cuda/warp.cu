@@ -221,11 +221,20 @@ namespace cv { namespace cuda { namespace device
                     typedef typename TypeVec<float, VecTraits<T>::cn>::vec_type work_type;
                     dim3 block(32, cc20 ? 8 : 4);
                     dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-                    cudev::TextureAccessor<T> texSrcWhole(srcWhole, yoff, xoff);
-                    B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
-                    BorderReader< cudev::TextureAccessor<T>, B<work_type> > brdSrc(texSrcWhole, brd);
-                    Filter< BorderReader< cudev::TextureAccessor<T>, B<work_type> > > filter_src(brdSrc);
-                    warp<Transform><<<grid, block>>>(filter_src, dst, warpMat);
+                    if (xoff || yoff) {
+                        cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
+                        B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
+                        BorderReader< cudev::TextureAccessorOffset<T>, B<work_type> > brdSrc(texSrcWhole, brd);
+                        Filter< BorderReader< cudev::TextureAccessorOffset<T>, B<work_type> > > filter_src(brdSrc);
+                        warp<Transform> << <grid, block >> > (filter_src, dst, warpMat);
+                    }
+                    else {
+                        cudev::TextureAccessor<T> texSrcWhole(srcWhole);
+                        B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
+                        BorderReader< cudev::TextureAccessor<T>, B<work_type> > brdSrc(texSrcWhole, brd);
+                        Filter< BorderReader< cudev::TextureAccessor<T>, B<work_type> > > filter_src(brdSrc);
+                        warp<Transform> << <grid, block >> > (filter_src, dst, warpMat);
+                    }
                     cudaSafeCall( cudaGetLastError() );
                     cudaSafeCall( cudaDeviceSynchronize() );
                 }
