@@ -262,12 +262,28 @@ namespace cv {
         //! @}
 
 
-
+        // Might be better to have two types of textureAccessor
+        // TextureAccessorOffset
+        // TextureAccessor
 
         template <class T> struct TextureAccessor
         {
-            TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
-                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
+            TextureAccessor(const PtrStepSz<T>& src) :
+                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp) {};
+
+            Texture<T> tex;
+            typedef T elem_type;
+            typedef int index_type;
+
+            __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const {
+                return tex(y, x);
+            }
+        };
+
+        template <class T> struct TextureAccessorOffset
+        {
+            TextureAccessorOffset(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
+                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp) , yoff(yoff_), xoff(xoff_) {};
 
             Texture<T> tex;
             typedef T elem_type;
@@ -275,12 +291,10 @@ namespace cv {
             int yoff;
             int xoff;
 
-            __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
-            {
+            __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const {
                 return tex(y + yoff, x + xoff);
             }
         };
-
     }
 
     //namespace cuda { // wrong namespace, should be in its own file? TypeVec is device and this is cudev?

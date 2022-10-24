@@ -975,8 +975,8 @@ namespace pyrlk
 
 template <int cn, typename T>  struct TextureAccessor
 {
-    typedef TypeVec<T, cn>::vec_type elem_type;
-    typedef TypeVec<float, cn>::vec_type ret_type;
+    typedef typename TypeVec<T, cn>::vec_type elem_type;
+    typedef typename TypeVec<float, cn>::vec_type ret_type;
     TextureAccessor(const PtrStepSz<elem_type>& src) :
         tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
     cv::cudev::Texture <elem_type, ret_type> tex;
@@ -996,7 +996,7 @@ template <int cn, typename T>  struct TextureAccessor
 // Nvidia Docs for cudaTextureDesc::readMode: Note that this applies only to 8 - bit and 16 - bit integer formats. 32 - bit integer format would not be promoted,
 // regardless of whether or not this cudaTextureDesc::readMode is set cudaReadModeNormalizedFloat is specified.
 template <int cn> struct TextureAccessor<cn, float> {
-    typedef TypeVec<float, cn>::vec_type float_type;
+    typedef typename TypeVec<float, cn>::vec_type float_type;
     TextureAccessor(const PtrStepSz<float_type>& src) :
         tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeElementType) {};
     cv::cudev::Texture <float_type, float_type> tex;
