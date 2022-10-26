@@ -46,6 +46,7 @@
 #include "opencv2/core/cuda/border_interpolate.hpp"
 #include "opencv2/core/cuda/limits.hpp"
 #include "opencv2/core/cuda.hpp"
+#include "opencv2/cudev/ptr2d/texture.hpp"
 
 using namespace cv::cuda;
 using namespace cv::cuda::device;
@@ -130,20 +131,20 @@ namespace tvl1flow
         }
     };
 
-    struct SrcTexObj : SrcTex
+    struct SrcTexObj// : SrcTex
     {
         __host__ SrcTexObj(cudaTextureObject_t tex_obj_I1_, cudaTextureObject_t tex_obj_I1x_, cudaTextureObject_t tex_obj_I1y_)
             : tex_obj_I1(tex_obj_I1_), tex_obj_I1x(tex_obj_I1x_), tex_obj_I1y(tex_obj_I1y_) {}
 
-        __device__ __forceinline__ float I1(float x, float y) const CV_OVERRIDE
+        __device__ __forceinline__ float I1(float x, float y) const //CV_OVERRIDE
         {
             return tex2D<float>(tex_obj_I1, x, y);
         }
-        __device__ __forceinline__ float I1x(float x, float y) const CV_OVERRIDE
+        __device__ __forceinline__ float I1x(float x, float y) const //CV_OVERRIDE
         {
             return tex2D<float>(tex_obj_I1x, x, y);
         }
-        __device__ __forceinline__ float I1y(float x, float y) const CV_OVERRIDE
+        __device__ __forceinline__ float I1y(float x, float y) const //CV_OVERRIDE
         {
             return tex2D<float>(tex_obj_I1y, x, y);
         }
@@ -154,11 +155,11 @@ namespace tvl1flow
     };
 
     template <
-        typename T,
-        typename = typename std::enable_if<std::is_base_of<SrcTex, T>::value>::type
+        typename Ptr2D, typename T
+        //typename = typename std::enable_if<std::is_base_of<SrcTex, T>::value>::type
     >
     __global__ void warpBackwardKernel(
-        const PtrStepSzf I0, const T src, const PtrStepf u1, const PtrStepf u2,
+        const PtrStepSzf I0, Ptr2D Ix, const T I1, const T I1x, const T I1y,  const PtrStepf u1, const PtrStepf u2,
         PtrStepf I1w, PtrStepf I1wx, PtrStepf I1wy, PtrStepf grad, PtrStepf rho)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -184,15 +185,31 @@ namespace tvl1flow
         float sumy = 0.0f;
         float wsum = 0.0f;
 
+        //if (threadIdx.x == 0 && threadIdx.y == 0) {
+        //    std::printf("")
+
+        //}
+
         for (int cy = ymin; cy <= ymax; ++cy)
         {
             for (int cx = xmin; cx <= xmax; ++cx)
             {
                 const float w = bicubicCoeff(wx - cx) * bicubicCoeff(wy - cy);
 
-                sum  += w * src.I1(cx, cy);
-                sumx += w * src.I1x(cx, cy);
-                sumy += w * src.I1y(cx, cy);
+                //float tmp1 = I1(cy, cx);
+                //float tmp2 = src.I1(cx, cy);
+                //if (tmp1 != tmp2) {
+                    //printf("tmp1: %f, x: %d, y: %d\n", tmp1, cx, cy);
+                //}
+                //sum  += w * Ix(cy, cx);
+                //sumx += w * I1x(cx, cy);
+                //sumy += w * I1y(cx, cy);
+
+
+
+                sum += w * tex2D<float>(I1, cx, cy);
+                sumx += w * tex2D<float>(I1x, cx, cy);
+                sumy += w * tex2D<float>(I1y, cx, cy);
 
                 wsum += w;
             }
@@ -228,22 +245,65 @@ namespace tvl1flow
         const dim3 grid(divUp(I0.cols, block.x), divUp(I0.rows, block.y));
 
         bool cc30 = deviceSupports(FEATURE_SET_COMPUTE_30);
+        //cv::cudev::TextureAccessor<float> texI1(I1);
+        //cv::cudev::TextureAccessor<float> texI0(I0);
+
+        // we can pass an empty texture object, but if we pass a constructed object it fails, is that because it references the same thing
+        // join it to another one.
+        //GpuMat tmp1(10, 10, CV_32FC1);
+        //cv::cudev::TextureAccessor<float> texTmp1(tmp1);
+        //cv::cudev::Texture<float> tmp();
+
+        //cv::cudev::GlobPtrSz<float> globptr = cv::cudev::globPtr(I1.data, I1.step, I1.rows, I1.cols);
+
+        //cudaResourceDesc texRes;
+        //std::memset(&texRes, 0, sizeof(texRes));
+        //texRes.resType = cudaResourceTypePitch2D;
+        //texRes.res.pitch2D.devPtr = globptr.data;
+        //texRes.res.pitch2D.height = globptr.rows;
+        //texRes.res.pitch2D.width = globptr.cols;
+        //texRes.res.pitch2D.pitchInBytes = globptr.step;
+        //texRes.res.pitch2D.desc = cudaCreateChannelDesc<float>();
+
+        //cudaTextureDesc texDescr;
+        //std::memset(&texDescr, 0, sizeof(texDescr));
+        //texDescr.normalizedCoords = false;
+        //texDescr.filterMode = cudaFilterModePoint;
+        //texDescr.addressMode[0] = cudaAddressModeClamp;
+        //texDescr.addressMode[1] = cudaAddressModeClamp;
+        //texDescr.addressMode[2] = cudaAddressModeClamp;
+        //texDescr.readMode = cudaReadModeElementType;
+        //cudaTextureObject_t texObj = 0;
+        //CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&texObj, &texRes, &texDescr, 0));
+
+
+        //cv::cudev::Texture<float> texTest(globptr);
+
+
+        //int sz = sizeof(texAccTest);
+        int tmp = 3;
 
         if (cc30)
         {
+            cv::cudev::TextureAccessor<float> texAccTest(I1);
+            std::printf("created %d\n", texAccTest.tex.texObj);
             cudaTextureDesc texDesc;
             memset(&texDesc, 0, sizeof(texDesc));
             texDesc.addressMode[0] = cudaAddressModeClamp;
             texDesc.addressMode[1] = cudaAddressModeClamp;
             texDesc.addressMode[2] = cudaAddressModeClamp;
 
-            cudaTextureObject_t texObj_I1 = 0, texObj_I1x = 0, texObj_I1y = 0;
+            cudaTextureObject_t texObj_I1 = 0, texObj_I1x = 0, texObj_I1y = 0, dummy = 0;
 
+            // try passing a texture object created as below, maybe its somethign to do with the TextureAccessor<float> struct?
+            //createTextureObjectPitch2D(&dummy, I1, texDesc);
             createTextureObjectPitch2D(&texObj_I1, I1, texDesc);
             createTextureObjectPitch2D(&texObj_I1x, I1x, texDesc);
             createTextureObjectPitch2D(&texObj_I1y, I1y, texDesc);
-
-            warpBackwardKernel << <grid, block, 0, stream >> > (I0, SrcTexObj(texObj_I1, texObj_I1x, texObj_I1y), u1, u2, I1w, I1wx, I1wy, grad, rho);
+            //texI1.tex.texObj
+            cudaDeviceSynchronize();
+            std::printf("launching with %d\n", texAccTest.tex.texObj);
+            warpBackwardKernel<< <grid, block, 0, stream >> > (I0, texAccTest, texObj_I1, texObj_I1x, texObj_I1y, u1, u2, I1w, I1wx, I1wy, grad, rho);
             cudaSafeCall(cudaGetLastError());
 
             if (!stream)
@@ -255,18 +315,20 @@ namespace tvl1flow
             cudaSafeCall(cudaDestroyTextureObject(texObj_I1x));
             cudaSafeCall(cudaDestroyTextureObject(texObj_I1y));
         }
-        else
-        {
-            bindTexture(&tex_I1, I1);
-            bindTexture(&tex_I1x, I1x);
-            bindTexture(&tex_I1y, I1y);
 
-            warpBackwardKernel << <grid, block, 0, stream >> > (I0, SrcTexRef(), u1, u2, I1w, I1wx, I1wy, grad, rho);
-            cudaSafeCall(cudaGetLastError());
+        std::printf("After Destroy\n");
+        //else
+        //{
+        //    bindTexture(&tex_I1, I1);
+        //    bindTexture(&tex_I1x, I1x);
+        //    bindTexture(&tex_I1y, I1y);
 
-            if (!stream)
-                cudaSafeCall(cudaDeviceSynchronize());
-        }
+        //    warpBackwardKernel << <grid, block, 0, stream >> > (I0, SrcTexRef(), u1, u2, I1w, I1wx, I1wy, grad, rho);
+        //    cudaSafeCall(cudaGetLastError());
+
+        //    if (!stream)
+        //        cudaSafeCall(cudaDeviceSynchronize());
+        //}
     }
 }
 

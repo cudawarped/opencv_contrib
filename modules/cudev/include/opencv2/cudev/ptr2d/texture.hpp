@@ -107,6 +107,26 @@ namespace cv {
 
             cudaTextureObject_t texObj;
 
+            //TexturePtr() {};
+
+            //TexturePtr(const cudaTextureObject_t texObj_) : texObj(texObj_) {};
+
+            //TexturePtr(const TexturePtr& other) : TexturePtr(other.texObj) {
+            //}
+
+            //TexturePtr(TexturePtr&& other) noexcept : texObj(std::exchange(other.texObj, nullptr)) {
+            //}
+
+            //TexturePtr& operator=(const TexturePtr& other) {
+            //    return *this = TexturePtr(other);
+            //}
+
+            //TexturePtr& operator=(TexturePtr&& other) noexcept {
+            //    std::swap(texObj, other.texObj);
+            //    return *this;
+            //}
+
+
             __device__ __forceinline__ R operator ()(float y, float x) const
             {
 #if CV_CUDEV_ARCH < 300
@@ -122,7 +142,31 @@ namespace cv {
         template <typename T, typename R = T> struct Texture : TexturePtr<T, R>
         {
             int rows, cols;
-            bool cc30;
+            //bool cc30;
+
+            // prevent copying, note to the effect that TexturePtr should be passed not TextureAccessor?
+            __host__ explicit Texture() {};
+
+            Texture(const cudaTextureObject_t texObj_) : TexturePtr<T,R>::texObj(texObj_) {};
+
+            Texture(const Texture& other) : Texture(other.texObj) {
+            }
+
+            Texture(Texture&& other) noexcept : TexturePtr<T,R>::texObj(std::exchange(other.texObj, nullptr)){
+            }
+
+            Texture& operator=(const Texture& other) {
+                return *this = Texture(other);
+            }
+
+            Texture& operator=(Texture&& other) noexcept {
+                std::swap(this->texObj, other.texObj);
+                return *this;
+            }
+
+
+
+
 
             __host__ explicit Texture(const GlobPtrSz<T>& mat,
                 bool normalizedCoords = false,
@@ -171,16 +215,20 @@ namespace cv {
 
             __host__ ~Texture()
             {
-                if (cc30)
-                {
+#if !defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 300)
+                //if (cc30)
+                //{
                     // Use the texture object
+                std::printf("destroying %d\n",this->texObj);
                     cudaDestroyTextureObject(this->texObj);
-                }
-                else
-                {
+                //}
+                //else
+#else
+                //{
                     // Use the texture reference
                     CvCudevTextureRef<T>::unbind();
-                }
+#endif
+                //}
             }
         };
 
