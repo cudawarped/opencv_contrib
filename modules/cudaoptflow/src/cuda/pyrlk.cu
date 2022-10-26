@@ -972,6 +972,8 @@ namespace pyrlk
     //    }
     //};
 
+// no offset, specialized only for this class where the return type is always float - see note.
+// Could name it to FloatTextureAccessor
 
 template <int cn, typename T>  struct TextureAccessor
 {
