@@ -107,7 +107,25 @@ namespace cv {
 
             cudaTextureObject_t texObj;
 
-            //TexturePtr() {};
+
+            TexturePtr(const cudaTextureObject_t texObj_) : texObj(texObj_) {
+                //std::cout << "Constructing TexturePtr with texObj_ = " << texObj_ << endl;
+            };
+
+            TexturePtr(const TexturePtr& other) : TexturePtr(other.texObj) {
+                //std::cout << "Copy Constructing TexturePtr with texObj_ = " << texObj_ << endl;
+            }
+
+            TexturePtr(TexturePtr&& other) noexcept : texObj(std::exchange(other.texObj, cudaTextureObject_t())) {
+               // std::cout << "Move Constructing TexturePtr with texObj_ = " << texObj_ << endl;
+            }
+
+            TexturePtr& operator=(const TexturePtr& other) {
+                //std::cout << "Copying TexturePtr with texObj_ = " << texObj_ << endl;
+                return *this = TexturePtr(other);
+            }
+
+            TexturePtr() {};
 
             //TexturePtr(const cudaTextureObject_t texObj_) : texObj(texObj_) {};
 
@@ -147,24 +165,28 @@ namespace cv {
             // prevent copying, note to the effect that TexturePtr should be passed not TextureAccessor?
             __host__ explicit Texture() {};
 
-            Texture(const cudaTextureObject_t texObj_) : TexturePtr<T,R>::texObj(texObj_) {};
+            Texture(const cudaTextureObject_t texObj_) : TexturePtr<T, R>(texObj_) {
+                printf("Constructing Texture with texObj_ = %d\n",texObj);
+            };
 
             Texture(const Texture& other) : Texture(other.texObj) {
+                printf("Copy Constructing Texture with texObj_ = %d\n", other.texObj);
             }
 
-            Texture(Texture&& other) noexcept : TexturePtr<T,R>::texObj(std::exchange(other.texObj, nullptr)){
+            Texture(Texture&& other) noexcept : TexturePtr<T, R>(std::exchange(other.texObj, cudaTextureObject_t())) {
+                printf("Move Constructing Texture with texObj_ = %d\n", other.texObj);
             }
 
             Texture& operator=(const Texture& other) {
+                printf("Copying Texture with texObj_ = %d\n", other.texObj);
                 return *this = Texture(other);
             }
 
             Texture& operator=(Texture&& other) noexcept {
+                printf("Moving Texture with texObj_ = %d",other.texObj);
                 std::swap(this->texObj, other.texObj);
                 return *this;
             }
-
-
 
 
 
