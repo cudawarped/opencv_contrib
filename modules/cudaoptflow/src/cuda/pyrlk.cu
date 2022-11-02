@@ -1296,7 +1296,7 @@ public:
                 float x = xBase - c_halfWin_x + j + 0.5f;
                 float y = yBase - c_halfWin_y + i + 0.5f;
 
-                I_patch[i * patchWidth + j] = texI(x, y);
+                I_patch[i * patchWidth + j] = texI(y, x);
 
                 // Scharr Deriv
 
@@ -1306,11 +1306,11 @@ public:
                 //dIdy_patch[i * patchWidth + j] = 3 * tex2D(tex_If, x-1, y+1) + 10 * tex2D(tex_If, x, y+1) + 3 * tex2D(tex_If, x+1, y+1) -
                 //                                (3 * tex2D(tex_If, x-1, y-1) + 10 * tex2D(tex_If, x, y-1) + 3 * tex2D(tex_If, x+1, y-1));
 
-                dIdx_patch[i * patchWidth + j] = 3 * texI(x + 1, y - 1) + 10 * texI(x + 1, y) + 3 * texI(x + 1, y + 1) -
-                    (3 * texI(x - 1, y - 1) + 10 * texI(x - 1, y) + 3 * texI(x - 1, y + 1));
+                dIdx_patch[i * patchWidth + j] = 3 * texI(y - 1, x + 1) + 10 * texI(y, x + 1) + 3 * texI(y + 1, x + 1) -
+                    (3 * texI(y - 1, x - 1) + 10 * texI(y, x - 1) + 3 * texI(y + 1, x - 1));
 
-                dIdy_patch[i * patchWidth + j] = 3 * texI(x - 1, y + 1) + 10 * texI(x, y + 1) + 3 * texI(x + 1, y + 1) -
-                    (3 * texI(x - 1, y - 1) + 10 * texI(x, y - 1) + 3 * texI(x + 1, y - 1));
+                dIdy_patch[i * patchWidth + j] = 3 * texI(y + 1, x - 1) + 10 * texI(y + 1,x) + 3 * texI(y+ 1, x + 1) -
+                    (3 * texI(y - 1, x - 1) + 10 * texI(y - 1,x) + 3 * texI(y - 1, x + 1));
             }
         }
 
@@ -1382,7 +1382,7 @@ public:
                 {
                     int I = I_patch[(threadIdx.y + i) * patchWidth + threadIdx.x + j];
                     //int J = tex2D(tex_Jf, nextPt.x - c_halfWin_x + j + 0.5f, nextPt.y - c_halfWin_y + i + 0.5f);
-                    int J = texJ(nextPt.x - c_halfWin_x + j + 0.5f, nextPt.y - c_halfWin_y + i + 0.5f);
+                    int J = texJ(nextPt.y - c_halfWin_y + i + 0.5f, nextPt.x - c_halfWin_x + j + 0.5f);
 
                     int diff = (J - I) * 32;
 
@@ -1419,7 +1419,7 @@ public:
                 {
                     int I = I_patch[(threadIdx.y + i) * patchWidth + threadIdx.x + j];
                     //int J = tex2D(tex_Jf, nextPt.x - c_halfWin_x + j + 0.5f, nextPt.y - c_halfWin_y + i + 0.5f);
-                    int J = texJ(nextPt.x - c_halfWin_x + j + 0.5f, nextPt.y - c_halfWin_y + i + 0.5f);
+                    int J = texJ(, nextPt.y - c_halfWin_y + i + 0.5f, nextPt.x - c_halfWin_x + j + 0.5f);
 
                     errval += ::abs(J - I);
                 }
