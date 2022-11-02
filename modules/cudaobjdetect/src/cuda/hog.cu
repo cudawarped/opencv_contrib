@@ -826,7 +826,7 @@ namespace cv { namespace cuda { namespace device
         //-------------------------------------------------------------------
         // Resize
 
-        __global__ void resize_for_hog_kernel(cv::cudev::Texture<uchar> src, float sx, float sy, PtrStepSz<uchar> dst)
+        __global__ void resize_for_hog_kernel(cv::cudev::TexturePtr<uchar> src, float sx, float sy, PtrStepSz<uchar> dst)
         {
             unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
             unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -835,7 +835,7 @@ namespace cv { namespace cuda { namespace device
                 dst.ptr(y)[x] = src(x * sx, y * sy) * 255;
         }
 
-        __global__ void resize_for_hog_kernel(cv::cudev::Texture<uchar4> src, float sx, float sy, PtrStepSz<uchar4> dst)
+        __global__ void resize_for_hog_kernel(cv::cudev::TexturePtr<uchar4> src, float sx, float sy, PtrStepSz<uchar4> dst)
         {
             unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
             unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -850,7 +850,7 @@ namespace cv { namespace cuda { namespace device
         template<class T>
         static void resize_for_hog(const GpuMat& src, PtrStepSzb dst)
         {
-            cv::cudev::Texture<T> tex(cv::cudev::GpuMat_<T>(src), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat);
+            cv::cudev::Texture<T> tex(src, false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat);
             cudaChannelFormatDesc desc = cudaCreateChannelDesc<T>();
 
             dim3 threads(32, 8);
