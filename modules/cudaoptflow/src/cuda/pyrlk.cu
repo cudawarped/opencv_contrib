@@ -421,7 +421,7 @@ namespace pyrlk
 
                 //I_patch[i][j] = Tex_I<cn, T>::read(x, y);
                 //typename TypeVec<T, cn>::vec_type tmp = texI(x, y);
-                I_patch[i][j] = texI(x, y);
+                I_patch[i][j] = texI(y, x);
                 //work_type tmp = texI(x, y);
 
                 //printf("%d, %d",(float) I_patch[i][j], (float)tmp);
@@ -440,11 +440,17 @@ namespace pyrlk
 
                 // Scharr Deriv
 
-                work_type dIdx = 3.0f * texI(x + 1, y - 1) + 10.0f * texI(x + 1, y) + 3.0f * texI(x + 1, y + 1) -
-                    (3.0f * texI(x - 1, y - 1) + 10.0f * texI(x - 1, y) + 3.0f * texI(x - 1, y + 1));
+                work_type dIdx = 3.0f * texI(y - 1, x + 1) + 10.0f * texI(y, x + 1) + 3.0f * texI(y + 1, x + 1) -
+                    (3.0f * texI(y - 1, x - 1) + 10.0f * texI(y, x - 1) + 3.0f * texI(y + 1, x - 1));
 
-                work_type dIdy = 3.0f * texI(x - 1, y + 1) + 10.0f * texI(x, y + 1) + 3.0f * texI(x + 1, y + 1) -
-                    (3.0f * texI(x - 1, y - 1) + 10.0f * texI(x, y - 1) + 3.0f * texI(x + 1, y - 1));
+                work_type dIdy = 3.0f * texI(y + 1, x - 1) + 10.0f * texI(y + 1, x) + 3.0f * texI(y + 1, x + 1) -
+                    (3.0f * texI(y - 1, x - 1) + 10.0f * texI(y - 1, x) + 3.0f * texI(y - 1, x + 1));
+
+                //work_type dIdx = 3.0f * texI(x + 1, y - 1) + 10.0f * texI(x + 1, y) + 3.0f * texI(x + 1, y + 1) -
+                //    (3.0f * texI(x - 1, y - 1) + 10.0f * texI(x - 1, y) + 3.0f * texI(x - 1, y + 1));
+
+                //work_type dIdy = 3.0f * texI(x - 1, y + 1) + 10.0f * texI(x, y + 1) + 3.0f * texI(x + 1, y + 1) -
+                //    (3.0f * texI(x - 1, y - 1) + 10.0f * texI(x, y - 1) + 3.0f * texI(x + 1, y - 1));
 
                 //work_type dIdx = 3.0f * Tex_I<cn,T>::read(x+1, y-1) + 10.0f * Tex_I<cn, T>::read(x+1, y) + 3.0f * Tex_I<cn,T>::read(x+1, y+1) -
                 //                 (3.0f * Tex_I<cn,T>::read(x-1, y-1) + 10.0f * Tex_I<cn, T>::read(x-1, y) + 3.0f * Tex_I<cn,T>::read(x-1, y+1));
@@ -520,7 +526,8 @@ namespace pyrlk
                 {
                     work_type I_val = I_patch[i][j];
                     //work_type J_val = Tex_J<cn, T>::read(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
-                    work_type J_val = texJ(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
+                    //work_type J_val = texJ(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
+                    work_type J_val = texJ(nextPt.y + y + 0.5f, nextPt.x + x + 0.5f);
 
                     work_type diff = (J_val - I_val) * 32.0f;
 
@@ -564,7 +571,8 @@ namespace pyrlk
                 {
                     work_type I_val = I_patch[i][j];
                     //work_type J_val = Tex_J<cn, T>::read(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
-                    work_type J_val = texJ(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
+                    //work_type J_val = texJ(nextPt.x + x + 0.5f, nextPt.y + y + 0.5f);
+                    work_type J_val = texJ(nextPt.y + y + 0.5f, nextPt.x + x + 0.5f);
 
                     work_type diff = J_val - I_val;
 
@@ -975,15 +983,78 @@ namespace pyrlk
 // no offset, specialized only for this class where the return type is always float - see note.
 // Could name it to FloatTextureAccessor
 
-template <int cn, typename T>  struct TextureAccessor
-{
+//template <int cn, typename T>  struct TextureAccessor
+//{
+//    typedef typename TypeVec<T, cn>::vec_type elem_type;
+//    typedef typename TypeVec<float, cn>::vec_type ret_type;
+//    TextureAccessor(const PtrStepSz<elem_type>& src) :
+//        tex(src, false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat)
+//    {
+//        texPtr = tex;
+//    };
+//    cv::cudev::Texture <elem_type, ret_type> tex;
+//    cv::cudev::TexturePtr<elem_type, ret_type> texPtr;
+//    __device__ __forceinline__ ret_type operator ()(float x, float y) const { return texPtr(y, x); }
+//};
+
+// FilterModeLinear only works with floating point return tpe
+template<int cn, class T> class TextureLinear : public cv::cudev::Texture<TypeVec<T, cn>::vec_type, TypeVec<float, cn>::vec_type> {
+public:
     typedef typename TypeVec<T, cn>::vec_type elem_type;
     typedef typename TypeVec<float, cn>::vec_type ret_type;
-    TextureAccessor(const PtrStepSz<elem_type>& src) :
-        tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
-    cv::cudev::Texture <elem_type, ret_type> tex;
-    __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
+    //__host__ TextureLinear(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords = false,const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+    //    cv::cudev::Texture<elem_type, ret_type>(rows,cols,data,step, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeNormalizedFloat)
+    //{
+    //}
+
+    __host__ TextureLinear(PtrStepSz<elem_type> src, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+        cv::cudev::Texture<elem_type, ret_type>(src, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeNormalizedFloat)
+    {
+    }
 };
+
+//template<class T> class TextureLinear : public cv::cudev::Texture<T, float4> {
+//public:
+//    __host__ TextureLinear(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+//        cv::cudev::Texture<T, float>(rows, cols, data, step, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeNormalizedFloat)
+//    {
+//    }
+//
+//    __host__ TextureLinear(PtrStepSz<T> src, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+//        cv::cudev::Texture<T, float>(src, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeNormalizedFloat)
+//    {
+//    }
+//};
+
+// cudaReadModeNormalizedFloat doesn't work if data is a float
+template<int cn> class TextureLinear<cn,float> : public cv::cudev::Texture<TypeVec<float, cn>::vec_type, TypeVec<float, cn>::vec_type>
+{
+public:
+    //__host__ TextureLinear(const int rows, const int cols, float* data, const size_t step, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+    //    cv::cudev::Texture <float, float>(rows, cols, data, step, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeElementType)
+    //{
+    //}
+    typedef typename TypeVec<float, cn>::vec_type float_type;
+    __host__ TextureLinear(PtrStepSz<float_type> src, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+        cv::cudev::Texture <float_type, float_type>(src, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeElementType)
+    {
+    }
+};
+
+//template<> class TextureLinear<float4> : public cv::cudev::Texture<float4, float4>
+//{
+//public:
+//    __host__ TextureLinear(const int rows, const int cols, float* data, const size_t step, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+//        cv::cudev::Texture <float, float>(rows, cols, data, step, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeElementType)
+//    {
+//    }
+//    __host__ TextureLinear(PtrStepSz<float> src, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
+//        cv::cudev::Texture <float, float>(src, normalizedCoords, cudaFilterModeLinear, addressMode, cudaReadModeElementType)
+//    {
+//    }
+//};
+
+
 
 //template <int cn, typename T> struct TextureAccessor<cn, T> {
 //    typedef TypeVec<T, cn>::vec_type elem_type;
@@ -997,13 +1068,17 @@ template <int cn, typename T>  struct TextureAccessor
 // cudaReadModeNormalizedFloat throws an error when trying to promote float values
 // Nvidia Docs for cudaTextureDesc::readMode: Note that this applies only to 8 - bit and 16 - bit integer formats. 32 - bit integer format would not be promoted,
 // regardless of whether or not this cudaTextureDesc::readMode is set cudaReadModeNormalizedFloat is specified.
-template <int cn> struct TextureAccessor<cn, float> {
-    typedef typename TypeVec<float, cn>::vec_type float_type;
-    TextureAccessor(const PtrStepSz<float_type>& src) :
-        tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeElementType) {};
-    cv::cudev::Texture <float_type, float_type> tex;
-    __device__ __forceinline__ float_type operator ()(float x, float y) const { return tex(y, x); }
-};
+//template <int cn> struct TextureAccessor<cn, float> {
+//    typedef typename TypeVec<float, cn>::vec_type float_type;
+//    TextureAccessor(const PtrStepSz<float_type>& src) :
+//        tex(src, false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeElementType)
+//    {
+//        texPtr = tex;
+//    };
+//    cv::cudev::Texture <float_type, float_type> tex;
+//    cv::cudev::TexturePtr<float_type, float_type> texPtr;
+//    __device__ __forceinline__ float_type operator ()(float x, float y) const { return texPtr(y, x); }
+//};
 
 
     template <int cn, int PATCH_X, int PATCH_Y, typename T> class sparse_caller
@@ -1033,13 +1108,27 @@ template <int cn> struct TextureAccessor<cn, float> {
             //cv::cudev::Texture<typename TypeVec<T, cn>::vec_type, typename TypeVec<float, cn>::vec_type> texJ = TextureFactory<cn, T>(J);
             //auto texI = TextureFactory<T,cn>(I);
             //auto texJ = TextureFactory<T,cn>(J);
-            auto texI = TextureAccessor<cn, T>(I);
-            auto texJ = TextureAccessor<cn, T>(J);
+            typedef typename TypeVec<T, cn>::vec_type dType;
+            typedef typename TypeVec<float, cn>::vec_type rType;
+            //auto texI = TextureAccessor<cn, T>(I);
+
+            //auto texJ = TextureAccessor<cn, T>(J);
+
+            //cv::cudev::Texture<dType, rType> texI(I, false, cudaFilterModeLinear);
+            //cv::cudev::Texture<dType, rType> texJ(J, false, cudaFilterModeLinear);
+
+            TextureLinear<cn,T> texI(I);
+            TextureLinear<cn,T> texJ(J);
+
+            //cv::cudev::TexturePtr<dType, rType> texPtrI = texI;
+
+
+
             //cv::cudev::Texture<typename TypeVec<T, cn>::vec_type, typename TypeVec<float, cn>::vec_type> texJ(cv::cudev::globPtr((J.data), J.step, J.rows, J.cols), false, cudaFilterModeLinear, cudaAddressModeClamp);
             if (level == 0 && err)
-                sparseKernel<cn, PATCH_X, PATCH_Y, true, T> << <grid, block, 0, stream >> > (texI, texJ, prevPts, nextPts, status, err, level, rows, cols);
+                sparseKernel<cn, PATCH_X, PATCH_Y, true, T, cv::cudev::TexturePtr<dType,rType>> << <grid, block, 0, stream >> > (texI, texJ, prevPts, nextPts, status, err, level, rows, cols);
             else
-                sparseKernel<cn, PATCH_X, PATCH_Y, false, T> << <grid, block, 0, stream >> > (texI, texJ, prevPts, nextPts, status, err, level, rows, cols);
+                sparseKernel<cn, PATCH_X, PATCH_Y, false, T, cv::cudev::TexturePtr<dType, rType>> << <grid, block, 0, stream >> > (texI, texJ, prevPts, nextPts, status, err, level, rows, cols);
 
             //if (level == 0 && err)
             //    sparseKernel<cn, PATCH_X, PATCH_Y, true, T> <<<grid, block, 0, stream >>>(prevPts, nextPts, status, err, level, rows, cols);
@@ -1411,9 +1500,10 @@ template <int cn> struct TextureAccessor<cn, float> {
             dim3 grid(divUp(I.cols, block.x), divUp(I.rows, block.y));
             //Tex_I<1, T>::bindTexture_(I);
             //Tex_J<1, T>::bindTexture_(J);
-            auto texI = TextureAccessor<1, T>(I);
-            auto texJ = TextureAccessor<1, T>(J);
-
+            //auto texI = TextureAccessor<1, T>(I);
+            //auto texJ = TextureAccessor<1, T>(J);
+            TextureLinear<1, T> texI(I);
+            TextureLinear<1, T> texJ(J);
             int2 halfWin = make_int2((winSize.x - 1) / 2, (winSize.y - 1) / 2);
             const int patchWidth = block.x + 2 * halfWin.x;
             const int patchHeight = block.y + 2 * halfWin.y;
@@ -1421,12 +1511,12 @@ template <int cn> struct TextureAccessor<cn, float> {
 
             if (err.data)
             {
-                denseKernel<true> << <grid, block, smem_size, stream >> >(texI, texJ, u, v, prevU, prevV, err, I.rows, I.cols);
+                denseKernel<true, cv::cudev::TexturePtr<T,float>> << <grid, block, smem_size, stream >> >(texI, texJ, u, v, prevU, prevV, err, I.rows, I.cols);
                 cudaSafeCall(cudaGetLastError());
             }
             else
             {
-                denseKernel<false> << <grid, block, smem_size, stream >> >(texI, texJ, u, v, prevU, prevV, PtrStepf(), I.rows, I.cols);
+                denseKernel<false, cv::cudev::TexturePtr<T, float>> << <grid, block, smem_size, stream >> >(texI, texJ, u, v, prevU, prevV, PtrStepf(), I.rows, I.cols);
                 cudaSafeCall(cudaGetLastError());
             }
 

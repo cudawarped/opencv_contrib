@@ -1,50 +1,9 @@
-/*M///////////////////////////////////////////////////////////////////////////////////////
-//
-//  IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
-//
-//  By downloading, copying, installing or using the software you agree to this license.
-//  If you do not agree to this license, do not download, install,
-//  copy or use the software.
-//
-//
-//                          License Agreement
-//                For Open Source Computer Vision Library
-//
-// Copyright (C) 2000-2008, Intel Corporation, all rights reserved.
-// Copyright (C) 2009, Willow Garage Inc., all rights reserved.
-// Copyright (C) 2013, OpenCV Foundation, all rights reserved.
-// Third party copyrights are property of their respective owners.
-//
-// Redistribution and use in source and binary forms, with or without modification,
-// are permitted provided that the following conditions are met:
-//
-//   * Redistribution's of source code must retain the above copyright notice,
-//     this list of conditions and the following disclaimer.
-//
-//   * Redistribution's in binary form must reproduce the above copyright notice,
-//     this list of conditions and the following disclaimer in the documentation
-//     and/or other materials provided with the distribution.
-//
-//   * The name of the copyright holders may not be used to endorse or promote products
-//     derived from this software without specific prior written permission.
-//
-// This software is provided by the copyright holders and contributors "as is" and
-// any express or implied warranties, including, but not limited to, the implied
-// warranties of merchantability and fitness for a particular purpose are disclaimed.
-// In no event shall the Intel Corporation or contributors be liable for any direct,
-// indirect, incidental, special, exemplary, or consequential damages
-// (including, but not limited to, procurement of substitute goods or services;
-// loss of use, data, or profits; or business interruption) however caused
-// and on any theory of liability, whether in contract, strict liability,
-// or tort (including negligence or otherwise) arising in any way out of
-// the use of this software, even if advised of the possibility of such damage.
-//
-//M*/
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
 
-#pragma once
-
-#ifndef OPENCV_CUDEV_PTR2D_TEXTURE_HPP
-#define OPENCV_CUDEV_PTR2D_TEXTURE_HPP
+#ifndef OPENCV_CUDEV_PTR2D_TEXTURE_OBJECT_HPP
+#define OPENCV_CUDEV_PTR2D_TEXTURE_OBJECT_HPP
 
 #include <cstring>
 #include "../common.hpp"
@@ -52,45 +11,20 @@
 #include "gpumat.hpp"
 #include "traits.hpp"
 #include <opencv2/core/cuda/vec_traits.hpp>
+#include <opencv2/core/utils/logger.hpp>
 
-// previous to sdk 5 compute 3 wasn't supported so this would fail, this allows building sdk5 for compute 2? must be some minor version issue in sdk 5?
-#if CUDART_VERSION >= 5050
+//  NEED COMMENT IN EXISTING TEXTURE THAT UNSAFE TO PASS TO KERNELS SEE EXAMPLE USAGE ....
 
-namespace
-{
-    template <typename T> struct CvCudevTextureRef
-    {
-        typedef texture<T, cudaTextureType2D, cudaReadModeElementType> TexRef;
+/** \file texture_object.hpp
+    */
 
-        static TexRef ref;
+    // Simple lightweight structures that encapsulates information about an image on device.
+    // It is intended to pass to nvcc-compiled code. It is unsafe for Texture to be passed as a kernel argument, destructor will get called
+// following stub destruction.
 
-        __host__ static void bind(const cv::cudev::GlobPtrSz<T>& mat,
-                                  bool normalizedCoords = false,
-                                  cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                                  cudaTextureAddressMode addressMode = cudaAddressModeClamp)
-        {
-            ref.normalized = normalizedCoords;
-            ref.filterMode = filterMode;
-            ref.addressMode[0] = addressMode;
-            ref.addressMode[1] = addressMode;
-            ref.addressMode[2] = addressMode;
-
-            cudaChannelFormatDesc desc = cudaCreateChannelDesc<T>();
-
-            CV_CUDEV_SAFE_CALL( cudaBindTexture2D(0, &ref, mat.data, &desc, mat.cols, mat.rows, mat.step) );
-        }
-
-        __host__ static void unbind()
-        {
-            cudaUnbindTexture(ref);
-        }
-    };
-
-    template <typename T>
-    typename CvCudevTextureRef<T>::TexRef CvCudevTextureRef<T>::ref;
-}
-
-#endif
+// SHOULD THE INDEX BE A FLOAT
+// NEEDS TO WORK ON PRE CUDEV ARCH - NO
+// CHECK IF OFFSET OBJECT CORRECTLY COPIES EVERYTHING.
 
 namespace cv {
     namespace cudev {
@@ -98,121 +32,109 @@ namespace cv {
         //! @addtogroup cudev
         //! @{
 
-#if CUDART_VERSION >= 5050
-
-        template <typename T, typename R = T> struct TexturePtr
-        {
-            typedef T     value_type;
+        template<class T, class R = T>
+        struct TexturePtr {
+            typedef T     elem_type, value_type;
+            //typedef T     value_type;
             typedef float index_type;
-
-            cudaTextureObject_t texObj;
-
-
-            TexturePtr(const cudaTextureObject_t texObj_) : texObj(texObj_) {
-                //std::cout << "Constructing TexturePtr with texObj_ = " << texObj_ << endl;
-            };
-
-            TexturePtr(const TexturePtr& other) : TexturePtr(other.texObj) {
-                //std::cout << "Copy Constructing TexturePtr with texObj_ = " << texObj_ << endl;
+            __host__ TexturePtr() {};
+            __host__ TexturePtr(const cudaTextureObject_t tex_) : tex(tex_) {};
+            __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
+                return tex2D<R>(tex, x, y);
             }
-
-            TexturePtr(TexturePtr&& other) noexcept : texObj(std::exchange(other.texObj, cudaTextureObject_t())) {
-               // std::cout << "Move Constructing TexturePtr with texObj_ = " << texObj_ << endl;
-            }
-
-            TexturePtr& operator=(const TexturePtr& other) {
-                //std::cout << "Copying TexturePtr with texObj_ = " << texObj_ << endl;
-                return *this = TexturePtr(other);
-            }
-
-            TexturePtr() {};
-
-            //TexturePtr(const cudaTextureObject_t texObj_) : texObj(texObj_) {};
-
-            //TexturePtr(const TexturePtr& other) : TexturePtr(other.texObj) {
-            //}
-
-            //TexturePtr(TexturePtr&& other) noexcept : texObj(std::exchange(other.texObj, nullptr)) {
-            //}
-
-            //TexturePtr& operator=(const TexturePtr& other) {
-            //    return *this = TexturePtr(other);
-            //}
-
-            //TexturePtr& operator=(TexturePtr&& other) noexcept {
-            //    std::swap(texObj, other.texObj);
-            //    return *this;
-            //}
-
-
-            __device__ __forceinline__ R operator ()(float y, float x) const
-            {
-#if CV_CUDEV_ARCH < 300
-                // Use the texture reference
-                return tex2D(CvCudevTextureRef<T>::ref, x, y);
-#else
-                // Use the texture object
-                return tex2D<R>(texObj, x, y);
-#endif
-            }
+        private:
+            cudaTextureObject_t tex;
         };
 
-        template <typename T, typename R = T> struct Texture : TexturePtr<T, R>
-        {
-            int rows, cols;
-            //bool cc30;
+        template<class T, class R = T>
+        struct TextureOffPtr {
+            typedef T     elem_type;
+            typedef float index_type;
+            __host__ TextureOffPtr(const cudaTextureObject_t tex_, const int yoff_, const int xoff_) : tex(tex_), yoff(yoff_), xoff(xoff_) {};
+            //__host__ TextureOffPtr(const cudaTextureObject_t tex, const int yoff_, const int xoff_) : TexturePtr<T, R>(tex) {
+            //    yoff = yoff_;
+            //    xoff = xoff_;
+            //}
 
-            // prevent copying, note to the effect that TexturePtr should be passed not TextureAccessor?
-            __host__ explicit Texture() {};
+            __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
+                return tex2D<R>(tex, x + xoff, y + yoff);
+            }
+        private:
+            cudaTextureObject_t tex;
+            int xoff = 0;
+            int yoff = 0;
+        };
 
-            Texture(const cudaTextureObject_t texObj_) : TexturePtr<T, R>(texObj_) {
-                printf("Constructing Texture with texObj_ = %d\n",texObj);
-            };
-
-            Texture(const Texture& other) : Texture(other.texObj) {
-                printf("Copy Constructing Texture with texObj_ = %d\n", other.texObj);
+        /** @brief non-copyable smart CUDA texture object
+            *
+            * UniqueTexture is a smart non-sharable wrapper for CUDA texture object handle which ensures that
+            * the handle is destroyed after use.
+            */
+            // Return Type on operator overload
+        template<class T, class R = T>
+        class UniqueTexture {//}; : public TexturePtr<T, R> {
+        public:
+            __host__ UniqueTexture() noexcept { }
+            __host__ UniqueTexture(UniqueTexture&) = delete;
+            __host__ UniqueTexture(UniqueTexture&& other) noexcept {
+                tex = other.tex;
+                other.tex = 0;
             }
 
-            Texture(Texture&& other) noexcept : TexturePtr<T, R>(std::exchange(other.texObj, cudaTextureObject_t())) {
-                printf("Move Constructing Texture with texObj_ = %d\n", other.texObj);
+            __host__ UniqueTexture(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords = false,
+                const cudaTextureFilterMode filterMode = cudaFilterModePoint, const cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                const cudaTextureReadMode readMode = cudaReadModeElementType)
+            {
+                create(rows, cols, data, step, normalizedCoords, filterMode, addressMode, readMode);
             }
 
-            Texture& operator=(const Texture& other) {
-                printf("Copying Texture with texObj_ = %d\n", other.texObj);
-                return *this = Texture(other);
+            __host__ ~UniqueTexture() {
+                printf("Destroying texture Object\n");
+                if (tex != cudaTextureObject_t()) {
+                    try {
+                        CV_CUDEV_SAFE_CALL(cudaDestroyTextureObject(tex));
+                    }
+                    catch (const cv::Exception& ex) {
+                        std::ostringstream os;
+                        os << "Exception caught during CUDA texture object destruction.\n";
+                        os << ex.what();
+                        os << "Exception will be ignored.\n";
+                        CV_LOG_WARNING(0, os.str().c_str());
+                    }
+                }
+
             }
 
-            Texture& operator=(Texture&& other) noexcept {
-                printf("Moving Texture with texObj_ = %d",other.texObj);
-                std::swap(this->texObj, other.texObj);
+            __host__ UniqueTexture& operator=(const UniqueTexture&) = delete;
+            __host__ UniqueTexture& operator=(UniqueTexture&& other) noexcept {
+                CV_Assert(other);
+                if (&other != this) {
+                    UniqueTexture(std::move(*this)); /* destroy current texture object */
+                    tex = other.tex;
+                    other.tex = cudaTextureObject_t();
+                }
                 return *this;
             }
 
+            __host__ cudaTextureObject_t get() const noexcept {
+                CV_Assert(tex);
+                return tex;
+            }
 
+            __host__ explicit operator bool() const noexcept { return tex != cudaTextureect_t(); }
 
-            __host__ explicit Texture(const GlobPtrSz<T>& mat,
-                bool normalizedCoords = false,
-                cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                cudaTextureAddressMode addressMode = cudaAddressModeClamp,
-                cudaTextureReadMode readMode = cudaReadModeElementType)
+        private:
+            __host__ void create(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords, const cudaTextureFilterMode filterMode,
+                const cudaTextureAddressMode addressMode, const cudaTextureReadMode readMode)
             {
-                rows = mat.rows;
-                cols = mat.cols;
-#if !defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 300)
-                //cc30 = deviceSupports(FEATURE_SET_COMPUTE_30);
-
-
-
-                //if (cc30)
-                //{
-                    // Use the texture object
+                //std::cout << "Constructing Texture from GlobPtrSz" << endl;
                 cudaResourceDesc texRes;
                 std::memset(&texRes, 0, sizeof(texRes));
                 texRes.resType = cudaResourceTypePitch2D;
-                texRes.res.pitch2D.devPtr = mat.data;
-                texRes.res.pitch2D.height = mat.rows;
-                texRes.res.pitch2D.width = mat.cols;
-                texRes.res.pitch2D.pitchInBytes = mat.step;
+                texRes.res.pitch2D.devPtr = data;
+                texRes.res.pitch2D.height = rows;
+                texRes.res.pitch2D.width = cols;
+                texRes.res.pitch2D.pitchInBytes = step;
                 texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
 
                 cudaTextureDesc texDescr;
@@ -224,122 +146,113 @@ namespace cv {
                 texDescr.addressMode[2] = addressMode;
                 texDescr.readMode = readMode;
 
-                CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0));
-                //}
-                //else
-                //{
-#else
-                // Use the texture reference
-                CvCudevTextureRef<T>::bind(mat, normalizedCoords, filterMode, addressMode);
-#endif
-                //}
+                CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&tex, &texRes, &texDescr, 0));
+
+                printf("Constructed Unique Texture Object: %d", tex);
             }
 
-            __host__ ~Texture()
-            {
-#if !defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 300)
-                //if (cc30)
-                //{
-                    // Use the texture object
-                std::printf("destroying %d\n",this->texObj);
-                    cudaDestroyTextureObject(this->texObj);
-                //}
-                //else
-#else
-                //{
-                    // Use the texture reference
-                    CvCudevTextureRef<T>::unbind();
-#endif
-                //}
-            }
+        private:
+            //typedef T     value_type;
+            //typedef float index_type;
+            cudaTextureObject_t tex;
         };
 
-        template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
+        /** @brief sharable smart CUDA texture object
+            *
+            * Texture is a smart sharable wrapper for CUDA texture handle which ensures that
+            * the handle is destroyed after use.
+            */
+        template<class T, class R = T>
+        class Texture {
+        public:
+            Texture(const Texture&) = default;
+            Texture(Texture&&) = default;
+
+            __host__ Texture(const int rows_, const int cols_, T* data, const size_t step, const bool normalizedCoords = false,
+                const cudaTextureFilterMode filterMode = cudaFilterModePoint, const cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                const cudaTextureReadMode readMode = cudaReadModeElementType) : rows(rows_), cols(cols_),
+                texture(std::make_shared<UniqueTexture<T,R>>(rows, cols, data, step, normalizedCoords, filterMode, addressMode, readMode))
+            {
+            }
+
+            __host__ Texture(PtrStepSz<T> src, const bool normalizedCoords = false,
+                const cudaTextureFilterMode filterMode = cudaFilterModePoint, const cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                const cudaTextureReadMode readMode = cudaReadModeElementType) :
+                Texture(src.rows, src.cols, src.data, src.step, normalizedCoords, filterMode, addressMode, readMode)
+            {
+            }
+
+            Texture& operator=(const Texture&) = default;
+            Texture& operator=(Texture&&) = default;
+
+            __host__ explicit operator bool() const noexcept {
+                if (!texture)
+                    return false;
+                return texture->operator bool();
+            }
+
+            __host__ operator TexturePtr<T, R>() const
+            {
+                printf("Creating TexureObjPtr from Texture\n");
+                return TexturePtr<T, R>(texture->get());
+            }
+
+            int rows = 0;
+            int cols = 0;
+
+        protected:
+            std::shared_ptr<UniqueTexture<T, R>> texture = 0;
+        };
+
+        template <typename T, typename R> struct PtrTraits< Texture<T, R> > : PtrTraitsBase<Texture<T, R>, TexturePtr<T, R> >
         {
         };
 
-#else
 
-        template <typename T> struct TexturePtr
-        {
-            typedef T     value_type;
-            typedef float index_type;
+        /** @brief sharable smart CUDA texture object
+        *
+        * Texture is a smart sharable wrapper for CUDA texture handle which ensures that
+        * the handle is destroyed after use.
+        */
+        // Prevent slicing of TextureOffPtr to TexturePtr by not inheriting from Texture<T,R>
+        template<class T, class R = T>
+        class TextureOff { //: public Texture<T, R> {
+        public:
+            TextureOff(const TextureOff&) = default;
+            TextureOff(TextureOff&&) = default;
 
-            cudaTextureObject_t texObj;
-
-            __device__ __forceinline__ T operator ()(float y, float x) const
+            __host__ TextureOff(const int rows, const int cols, T* data, const size_t step, const int yoff_ = 0, const int xoff_ = 0, const bool normalizedCoords = false,
+                const cudaTextureFilterMode filterMode = cudaFilterModePoint, const cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                const cudaTextureReadMode readMode = cudaReadModeElementType) :
+                texture(std::make_shared<UniqueTexture<T, R>>(rows, cols, data, step, normalizedCoords, filterMode, addressMode, readMode)), xoff(xoff_), yoff(yoff_)
             {
-#if CV_CUDEV_ARCH >= 300
-                // Use the texture object
-                return tex2D<T>(texObj, x, y);
-#else
-                CV_UNUSED(y);
-                CV_UNUSED(x);
-                return T();
-#endif
-            }
-        };
-
-        template <typename T> struct Texture : TexturePtr<T>
-        {
-            int rows, cols;
-
-            __host__ explicit Texture(const GlobPtrSz<T>& mat,
-                bool normalizedCoords = false,
-                cudaTextureFilterMode filterMode = cudaFilterModePoint,
-                cudaTextureAddressMode addressMode = cudaAddressModeClamp)
-            {
-                CV_Assert(deviceSupports(FEATURE_SET_COMPUTE_30));
-
-                rows = mat.rows;
-                cols = mat.cols;
-
-                // Use the texture object
-                cudaResourceDesc texRes;
-                std::memset(&texRes, 0, sizeof(texRes));
-                texRes.resType = cudaResourceTypePitch2D;
-                texRes.res.pitch2D.devPtr = mat.data;
-                texRes.res.pitch2D.height = mat.rows;
-                texRes.res.pitch2D.width = mat.cols;
-                texRes.res.pitch2D.pitchInBytes = mat.step;
-                texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
-
-                cudaTextureDesc texDescr;
-                std::memset(&texDescr, 0, sizeof(texDescr));
-                texDescr.normalizedCoords = normalizedCoords;
-                texDescr.filterMode = filterMode;
-                texDescr.addressMode[0] = addressMode;
-                texDescr.addressMode[1] = addressMode;
-                texDescr.addressMode[2] = addressMode;
-                texDescr.readMode = cudaReadModeElementType;
-
-                CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&this->texObj, &texRes, &texDescr, 0));
             }
 
-            __host__ ~Texture()
+            __host__ TextureOff(PtrStepSz<T> src, const int yoff = 0, const int xoff = 0, const bool normalizedCoords = false,
+                const cudaTextureFilterMode filterMode = cudaFilterModePoint, const cudaTextureAddressMode addressMode = cudaAddressModeClamp,
+                const cudaTextureReadMode readMode = cudaReadModeElementType) :
+                TextureOff(src.rows, src.cols, src.data, src.step, yoff, xoff, normalizedCoords, filterMode, addressMode, readMode)
             {
-                // Use the texture object
-                cudaDestroyTextureObject(this->texObj);
             }
+
+            TextureOff& operator=(const TextureOff&) = default;
+            TextureOff& operator=(TextureOff&&) = default;
+
+            __host__ operator TextureOffPtr<T, R>() const
+            {
+                return TextureOffPtr<T, R>(texture->get(), yoff, xoff);
+            }
+
+        private:
+            int xoff = 0;
+            int yoff = 0;
+            std::shared_ptr<UniqueTexture<T, R>> texture = 0;
         };
 
-        template <typename T> struct PtrTraits< Texture<T> > : PtrTraitsBase<Texture<T>, TexturePtr<T> >
-        {
-        };
-
-#endif
-
-        //! @}
-
-
-        // Might be better to have two types of textureAccessor
-        // TextureAccessorOffset
-        // TextureAccessor
-
-        template <class T> struct TextureAccessor
+ /*       template <class T> struct TextureAccessor
         {
             TextureAccessor(const PtrStepSz<T>& src) :
-                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp) {};
+                tex(src, false, cudaFilterModePoint, cudaAddressModeClamp) {};
 
             Texture<T> tex;
             typedef T elem_type;
@@ -353,7 +266,7 @@ namespace cv {
         template <class T> struct TextureAccessorOffset
         {
             TextureAccessorOffset(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
-                tex(globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp) , yoff(yoff_), xoff(xoff_) {};
+                tex(src, false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
 
             Texture<T> tex;
             typedef T elem_type;
@@ -362,46 +275,11 @@ namespace cv {
             int xoff;
 
             __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const {
-                return tex(y + yoff, x + xoff);
+                return tex.get(y + yoff, x + xoff);
             }
-        };
+        };*/
+
     }
-
-    //namespace cuda { // wrong namespace, should be in its own file? TypeVec is device and this is cudev?
-    //    namespace device {
-    //        template <int cn, typename T, typename R>  struct TextureAccessor
-    //        {
-    //            typedef TypeVec<T, cn>::vec_type elem_type;
-    //            typedef TypeVec<R, cn>::vec_type ret_type;
-    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
-    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp) {};
-    //            //TextureAccessor(const PtrStepSz<elem_type>& src) : TextureAccessor
-    //            //    tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
-    //            cv::cudev::Texture <elem_type, ret_type> tex;
-    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
-    //        };
-
-    //        template <int cn, typename T> struct TextureAccessor<cn, T, float> {
-    //            typedef TypeVec<T, cn>::vec_type elem_type;
-    //            typedef TypeVec<float, cn>::vec_type ret_type;
-    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
-    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat) {};
-    //            cv::cudev::Texture <elem_type, ret_type> tex;
-    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
-    //        };
-
-    //        template <int cn> struct TextureAccessor<cn, float, float> {
-    //            typedef TypeVec<float, cn>::vec_type elem_type;
-    //            typedef TypeVec<float, cn>::vec_type ret_type;
-    //            TextureAccessor(const PtrStepSz<elem_type>& src) :
-    //                tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModeLinear, cudaAddressModeClamp) {};
-    //            cv::cudev::Texture <elem_type, ret_type> tex;
-    //            __device__ __forceinline__ ret_type operator ()(float x, float y) const { return tex(y, x); }
-    //        };
-    //    }
-    //}
-
-
 }
 
 #endif

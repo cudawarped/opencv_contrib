@@ -133,18 +133,18 @@ namespace cv { namespace cuda { namespace device
                     //tex_remap_ ## type ##_reader texSrc(xoff, yoff);
                     if (srcWhole.cols == src.cols && srcWhole.rows == src.rows)
                     {
-                        cudev::TextureAccessor<T> texSrcWhole(srcWhole);
+                        cudev::Texture<T> texSrcWhole(srcWhole);
                         B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
-                        BorderReader< cudev::TextureAccessor<T>, B<work_type> > brdSrc(texSrcWhole, brd);
-                        Filter< BorderReader<cudev::TextureAccessor<T>, B<work_type> > > filter_src(brdSrc);
+                        BorderReader< cudev::TexturePtr<T>, B<work_type> > brdSrc(texSrcWhole, brd);
+                        Filter< BorderReader<cudev::TexturePtr<T>, B<work_type> > > filter_src(brdSrc);
                         remap << <grid, block >> > (filter_src, mapx, mapy, dst);
 
                     }
                     else {
-                        cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
+                        cudev::TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
                         B<work_type> brd(src.rows, src.cols, VecTraits<work_type>::make(borderValue));
-                        BorderReader< cudev::TextureAccessorOffset<T>, B<work_type> > brdSrc(texSrcWhole, brd);
-                        Filter< BorderReader<cudev::TextureAccessorOffset<T>, B<work_type> > > filter_src(brdSrc);
+                        BorderReader< cudev::TextureOffPtr<T>, B<work_type> > brdSrc(texSrcWhole, brd);
+                        Filter< BorderReader<cudev::TextureOffPtr<T>, B<work_type> > > filter_src(brdSrc);
                         remap << <grid, block >> > (filter_src, mapx, mapy, dst);
                     }
 
@@ -164,16 +164,16 @@ namespace cv { namespace cuda { namespace device
                     //tex_remap_ ## type ##_reader texSrc(xoff, yoff);
                     if (srcWhole.cols == src.cols && srcWhole.rows == src.rows)
                     {
-                        cudev::TextureAccessor<T> texSrcWhole(srcWhole);
-                        Filter<cudev::TextureAccessor<T>> filter_src(texSrcWhole);
+                        cudev::Texture<T> texSrcWhole(srcWhole);
+                        Filter<cudev::TexturePtr<T>> filter_src(texSrcWhole);
                         remap<<<grid, block>>>(filter_src, mapx, mapy, dst);
                     }
                     else
                     {
-                        cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
+                        cudev::TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
                         BrdReplicate<T> brd(src.rows, src.cols);
-                        BorderReader< cudev::TextureAccessorOffset<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-                        Filter< BorderReader< cudev::TextureAccessorOffset<T>, BrdReplicate<T> > > filter_src(brdSrc);
+                        BorderReader< cudev::TextureOffPtr<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+                        Filter< BorderReader< cudev::TextureOffPtr<T>, BrdReplicate<T> > > filter_src(brdSrc);
                         remap<<<grid, block>>>(filter_src, mapx, mapy, dst);
                     }
                     cudaSafeCall( cudaGetLastError() );

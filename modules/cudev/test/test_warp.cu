@@ -141,6 +141,7 @@ TEST(Resize, Upscale)
 
     GpuMat_<float> d_src(src);
     Texture<float> tex_src(d_src);
+    //TextureObj<float> tex_src(d_src);
 
     GpuMat_<float> dst1 = resize_(interCubic(tex_src), 2, 2);
 

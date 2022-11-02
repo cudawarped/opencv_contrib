@@ -155,11 +155,11 @@ namespace tvl1flow
     };
 
     template <
-        typename Ptr2D, typename T
+         typename T
         //typename = typename std::enable_if<std::is_base_of<SrcTex, T>::value>::type
     >
     __global__ void warpBackwardKernel(
-        const PtrStepSzf I0, Ptr2D Ix, const T I1, const T I1x, const T I1y,  const PtrStepf u1, const PtrStepf u2,
+        const PtrStepSzf I0, const T I1, const T I1x, const T I1y,  const PtrStepf u1, const PtrStepf u2,
         PtrStepf I1w, PtrStepf I1wx, PtrStepf I1wy, PtrStepf grad, PtrStepf rho)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -201,15 +201,15 @@ namespace tvl1flow
                 //if (tmp1 != tmp2) {
                     //printf("tmp1: %f, x: %d, y: %d\n", tmp1, cx, cy);
                 //}
-                //sum  += w * Ix(cy, cx);
-                //sumx += w * I1x(cx, cy);
-                //sumy += w * I1y(cx, cy);
+                sum  += w * I1(cy, cx);
+                sumx += w * I1x(cy, cx);
+                sumy += w * I1y(cy, cx);
 
 
 
-                sum += w * tex2D<float>(I1, cx, cy);
-                sumx += w * tex2D<float>(I1x, cx, cy);
-                sumy += w * tex2D<float>(I1y, cx, cy);
+                //sum += w * tex2D<float>(I1, cx, cy);
+                //sumx += w * tex2D<float>(I1x, cx, cy);
+                //sumy += w * tex2D<float>(I1y, cx, cy);
 
                 wsum += w;
             }
@@ -285,8 +285,8 @@ namespace tvl1flow
 
         if (cc30)
         {
-            cv::cudev::TextureAccessor<float> texAccTest(I1);
-            std::printf("created %d\n", texAccTest.tex.texObj);
+            //cv::cudev::Texture<float> texAccTest(I1);
+            //std::printf("created %d\n", texAccTest.tex.texObj);
             cudaTextureDesc texDesc;
             memset(&texDesc, 0, sizeof(texDesc));
             texDesc.addressMode[0] = cudaAddressModeClamp;
@@ -302,8 +302,13 @@ namespace tvl1flow
             createTextureObjectPitch2D(&texObj_I1y, I1y, texDesc);
             //texI1.tex.texObj
             cudaDeviceSynchronize();
-            std::printf("launching with %d\n", texAccTest.tex.texObj);
-            warpBackwardKernel<< <grid, block, 0, stream >> > (I0, texAccTest, texObj_I1, texObj_I1x, texObj_I1y, u1, u2, I1w, I1wx, I1wy, grad, rho);
+
+            cv::cudev::Texture<float> texI1(I1);
+            cv::cudev::Texture<float> texI1x(I1x);
+            cv::cudev::Texture<float> texI1y(I1y);
+
+            //std::printf("launching with %d\n", texAccTest.tex.texObj);
+            warpBackwardKernel<cv::cudev::TexturePtr<float>><< <grid, block, 0, stream >> > (I0, texI1, texI1x, texI1y , u1, u2, I1w, I1wx, I1wy, grad, rho);
             cudaSafeCall(cudaGetLastError());
 
             if (!stream)
