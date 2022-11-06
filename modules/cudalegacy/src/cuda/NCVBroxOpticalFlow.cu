@@ -65,6 +65,7 @@
 
 #include "opencv2/cudalegacy/NPP_staging.hpp"
 #include "opencv2/cudalegacy/NCVBroxOpticalFlow.hpp"
+#include "opencv2/cudev/ptr2d/texture.hpp"
 
 
 typedef NCVVectorAlloc<Ncv32f> FloatVector;
@@ -266,7 +267,7 @@ __forceinline__ __device__ void diffusivity_along_y(float *s, int pos, const flo
 ///\param p global memory array pitch in floats
 ///////////////////////////////////////////////////////////////////////////////
 template<int tex_id>
-__forceinline__ __device__ void load_array_element(float *smem, int is, int js, int i, int j, int w, int h, int p)
+__forceinline__ __device__ void load_array_element(cv::cudev::TexturePtr<float> src, float *smem, int is, int js, int i, int j, int w, int h, int p)
 {
     //position within shared memory array
     const int ijs = js * PSOR_PITCH + is;
@@ -279,6 +280,12 @@ __forceinline__ __device__ void load_array_element(float *smem, int is, int js, 
     switch(tex_id){
         case 0:
             smem[ijs] = tex1Dfetch(tex_u, pos);
+            float t1 = tex1Dfetch(tex_u, pos);
+            float t2 = src(pos);
+            if (t1 != t2) {
+                printf("t1: %f, t2: %f\n", t1, t2);
+            }
+            //smem[ijs] = src(pos);
             break;
         case 1:
             smem[ijs] = tex1Dfetch(tex_v, pos);
@@ -302,48 +309,48 @@ __forceinline__ __device__ void load_array_element(float *smem, int is, int js, 
 ///\param p global memory array pitch in floats
 ///////////////////////////////////////////////////////////////////////////////
 template<int tex>
-__forceinline__ __device__ void load_array(float *smem, int ig, int jg, int w, int h, int p)
+__forceinline__ __device__ void load_array(cv::cudev::TexturePtr<float> src, float *smem, int ig, int jg, int w, int h, int p)
 {
     const int i = threadIdx.x + 2;
     const int j = threadIdx.y + 2;
-    load_array_element<tex>(smem, i, j, ig, jg, w, h, p);//load current pixel
+    load_array_element<tex>(src, smem, i, j, ig, jg, w, h, p);//load current pixel
     __syncthreads();
     if(threadIdx.y < 2)
     {
         //load bottom shadow elements
-        load_array_element<tex>(smem, i, j-2, ig, jg-2, w, h, p);
+        load_array_element<tex>(src, smem, i, j-2, ig, jg-2, w, h, p);
         if(threadIdx.x < 2)
         {
             //load bottom right shadow elements
-            load_array_element<tex>(smem, i+PSOR_TILE_WIDTH, j-2, ig+PSOR_TILE_WIDTH, jg-2, w, h, p);
+            load_array_element<tex>(src, smem, i+PSOR_TILE_WIDTH, j-2, ig+PSOR_TILE_WIDTH, jg-2, w, h, p);
             //load middle right shadow elements
-            load_array_element<tex>(smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
         }
         else if(threadIdx.x >= PSOR_TILE_WIDTH-2)
         {
             //load bottom left shadow elements
-            load_array_element<tex>(smem, i-PSOR_TILE_WIDTH, j-2, ig-PSOR_TILE_WIDTH, jg-2, w, h, p);
+            load_array_element<tex>(src, smem, i-PSOR_TILE_WIDTH, j-2, ig-PSOR_TILE_WIDTH, jg-2, w, h, p);
             //load middle left shadow elements
-            load_array_element<tex>(smem, i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem,  i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
         }
     }
     else if(threadIdx.y >= PSOR_TILE_HEIGHT-2)
     {
         //load upper shadow elements
-        load_array_element<tex>(smem, i, j+2, ig, jg+2, w, h, p);
+        load_array_element<tex>(src, smem, i, j+2, ig, jg+2, w, h, p);
         if(threadIdx.x < 2)
         {
             //load upper right shadow elements
-            load_array_element<tex>(smem, i+PSOR_TILE_WIDTH, j+2, ig+PSOR_TILE_WIDTH, jg+2, w, h, p);
+            load_array_element<tex>(src, smem, i+PSOR_TILE_WIDTH, j+2, ig+PSOR_TILE_WIDTH, jg+2, w, h, p);
             //load middle right shadow elements
-            load_array_element<tex>(smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
         }
         else if(threadIdx.x >= PSOR_TILE_WIDTH-2)
         {
             //load upper left shadow elements
-            load_array_element<tex>(smem, i-PSOR_TILE_WIDTH, j+2, ig-PSOR_TILE_WIDTH, jg+2, w, h, p);
+            load_array_element<tex>(src, smem, i-PSOR_TILE_WIDTH, j+2, ig-PSOR_TILE_WIDTH, jg+2, w, h, p);
             //load middle left shadow elements
-            load_array_element<tex>(smem, i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem, i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
         }
     }
     else
@@ -352,12 +359,12 @@ __forceinline__ __device__ void load_array(float *smem, int ig, int jg, int w, i
         if(threadIdx.x < 2)
         {
             //load middle right shadow elements
-            load_array_element<tex>(smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem, i+PSOR_TILE_WIDTH, j, ig+PSOR_TILE_WIDTH, jg, w, h, p);
         }
         else if(threadIdx.x >= PSOR_TILE_WIDTH-2)
         {
             //load middle left shadow elements
-            load_array_element<tex>(smem, i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
+            load_array_element<tex>(src, smem, i-PSOR_TILE_WIDTH, j, ig-PSOR_TILE_WIDTH, jg, w, h, p);
         }
     }
     __syncthreads();
@@ -383,7 +390,7 @@ __forceinline__ __device__ void load_array(float *smem, int ig, int jg, int w, i
 /// \param gamma (in) gamma in Brox model (edge importance)
 ///////////////////////////////////////////////////////////////////////////////
 
-__global__ void prepare_sor_stage_1_tex(float *diffusivity_x, float *diffusivity_y,
+__global__ void prepare_sor_stage_1_tex(cv::cudev::TexturePtr<float> texU, float *diffusivity_x, float *diffusivity_y,
                                                         float *denominator_u, float *denominator_v,
                                                         float *numerator_dudv,
                                                         float *numerator_u, float *numerator_v,
@@ -408,10 +415,10 @@ __global__ void prepare_sor_stage_1_tex(float *diffusivity_x, float *diffusivity
     float x = (float)ig + 0.5f;
     float y = (float)jg + 0.5f;
     //load u  and v to smem
-    load_array<0>(u, ig, jg, w, h, s);
-    load_array<1>(v, ig, jg, w, h, s);
-    load_array<2>(du, ig, jg, w, h, s);
-    load_array<3>(dv, ig, jg, w, h, s);
+    load_array<0>(texU, u, ig, jg, w, h, s);
+    load_array<1>(texU, v, ig, jg, w, h, s);
+    load_array<2>(texU, du, ig, jg, w, h, s);
+    load_array<3>(texU, dv, ig, jg, w, h, s);
     //warped position
     float wx = (x + u[ijs])/(float)w;
     float wy = (y + v[ijs])/(float)h;
@@ -1000,7 +1007,9 @@ NCVStatus NCVBroxOpticalFlow(const NCVBroxOpticalFlowDescriptor desc,
             ncvAssertCUDAReturn(cudaBindTexture2D(0, tex_Ixy, Ixy.ptr(), ch_desc, kLevelWidth, kLevelHeight, kPitchTex), NCV_CUDA_ERROR);
 
             //    flow
-            ncvAssertCUDAReturn(cudaBindTexture(0, tex_u, ptrU->ptr(), ch_desc, kLevelSizeInBytes), NCV_CUDA_ERROR);
+            ncvAssertCUDAReturn(cudaBindTexture(0, tex_u, ptrU->ptr(), ch_desc, kLevelSizeInBytes), NCV_CUDA_ERROR);//-------------------------------------------------------------
+            printf("size: %d\n", kLevelSizeInBytes);
+            cv::cudev::Texture<float> texU(1, kLevelSizeInBytes / sizeof(float), ptrU->ptr(), kLevelSizeInBytes, false, cudaFilterModePoint, cudaAddressModeClamp, cudaReadModeElementType, 1);
             ncvAssertCUDAReturn(cudaBindTexture(0, tex_v, ptrV->ptr(), ch_desc, kLevelSizeInBytes), NCV_CUDA_ERROR);
             //    flow increments
             ncvAssertCUDAReturn(cudaBindTexture(0, tex_du, du.ptr(), ch_desc, kLevelSizeInBytes), NCV_CUDA_ERROR);
@@ -1019,7 +1028,7 @@ NCVStatus NCVBroxOpticalFlow(const NCVBroxOpticalFlowDescriptor desc,
             {
                 //compute coefficients
                 prepare_sor_stage_1_tex<<<psor_blocks, psor_threads, 0, stream>>>
-                    (diffusivity_x.ptr(),
+                    (texU, diffusivity_x.ptr(),
                      diffusivity_y.ptr(),
                      denom_u.ptr(),
                      denom_v.ptr(),

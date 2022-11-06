@@ -1419,7 +1419,7 @@ public:
                 {
                     int I = I_patch[(threadIdx.y + i) * patchWidth + threadIdx.x + j];
                     //int J = tex2D(tex_Jf, nextPt.x - c_halfWin_x + j + 0.5f, nextPt.y - c_halfWin_y + i + 0.5f);
-                    int J = texJ(, nextPt.y - c_halfWin_y + i + 0.5f, nextPt.x - c_halfWin_x + j + 0.5f);
+                    int J = texJ(nextPt.y - c_halfWin_y + i + 0.5f, nextPt.x - c_halfWin_x + j + 0.5f);
 
                     errval += ::abs(J - I);
                 }
