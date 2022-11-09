@@ -57,6 +57,9 @@ namespace cv { namespace cudev {
 
 using namespace cv::cuda;
 
+// CV_USE_NPP_STREAM_CTX
+#define CV_USE_NPP_STREAM_CTX (NPP_VERSION >= (10 * 1000 + 1 * 100 + 0))
+
 // CV_CUDEV_ARCH
 
 #ifndef __CUDA_ARCH__
