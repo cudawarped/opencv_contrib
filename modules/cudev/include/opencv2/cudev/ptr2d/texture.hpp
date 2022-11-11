@@ -33,7 +33,7 @@ namespace cv {  namespace cudev {
     */
     template<class T, class R = T>
     struct TexturePtr {
-        typedef T     elem_type, value_type;
+        typedef R     elem_type, value_type;
         typedef float index_type;
         __host__ TexturePtr() {};
         __host__ TexturePtr(const cudaTextureObject_t tex_) : tex(tex_) {};
@@ -47,9 +47,25 @@ namespace cv {  namespace cudev {
         cudaTextureObject_t tex;
     };
 
+    // textures are a maximum of 32 bits wide, 64 bits must be read as two 32 bit ints
+    template <class R>
+    struct TexturePtr<uint64, R> {
+        typedef float index_type;
+        __host__ TexturePtr() {};
+        __host__ TexturePtr(const cudaTextureObject_t tex_) : tex(tex_) {};
+        __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
+            return *(reinterpret_cast<R*>(&tex2D<uint2>(tex, x, y)));
+        }
+        __device__ __forceinline__ R operator ()(index_type x) const {
+            return *(reinterpret_cast<R*>(&tex1Dfetch<uint2>(tex, x)));
+        }
+    private:
+        cudaTextureObject_t tex;
+    };
+
     template<class T, class R = T>
     struct TextureOffPtr {
-        typedef T     elem_type;
+        typedef R     elem_type;
         typedef float index_type;
         __host__ TextureOffPtr(const cudaTextureObject_t tex_, const int yoff_, const int xoff_) : tex(tex_), yoff(yoff_), xoff(xoff_) {};
         __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
@@ -124,6 +140,8 @@ namespace cv {  namespace cudev {
         __host__ explicit operator bool() const noexcept { return tex != cudaTextureect_t(); }
 
     private:
+
+        template <class T>
         __host__ void create(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords, const cudaTextureFilterMode filterMode,
             const cudaTextureAddressMode addressMode, const cudaTextureReadMode readMode)
         {
@@ -155,6 +173,12 @@ namespace cv {  namespace cudev {
             texDescr.readMode = readMode;
 
             CV_CUDEV_SAFE_CALL(cudaCreateTextureObject(&tex, &texRes, &texDescr, 0));
+        }
+
+        __host__ void create(const int rows, const int cols, uint64* data, const size_t step, const bool normalizedCoords, const cudaTextureFilterMode filterMode,
+            const cudaTextureAddressMode addressMode, const cudaTextureReadMode readMode)
+        {
+            create<uint2>(rows, cols, (uint2*)data, step, normalizedCoords, filterMode, addressMode, readMode);
         }
 
     private:
