@@ -193,6 +193,7 @@ namespace cv {  namespace cudev {
     template<class T, class R = T>
     class Texture {
     public:
+        Texture() = default;
         Texture(const Texture&) = default;
         Texture(Texture&&) = default;
 
@@ -204,7 +205,7 @@ namespace cv {  namespace cudev {
 
         __host__ Texture(const size_t sizeInBytes, T* data, const bool normalizedCoords = false, const cudaTextureFilterMode filterMode = cudaFilterModePoint,
             const cudaTextureAddressMode addressMode = cudaAddressModeClamp, const cudaTextureReadMode readMode = cudaReadModeElementType) :
-            rows(1), cols(sizeInBytes/sizeof(T)), texture(std::make_shared<UniqueTexture<T, R>>(sizeInBytes, data, normalizedCoords, filterMode, addressMode, readMode))
+            rows(1), cols(static_cast<int>(sizeInBytes/sizeof(T))), texture(std::make_shared<UniqueTexture<T, R>>(sizeInBytes, data, normalizedCoords, filterMode, addressMode, readMode))
         {
         }
 
