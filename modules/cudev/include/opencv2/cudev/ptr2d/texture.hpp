@@ -225,7 +225,10 @@ namespace cv {  namespace cudev {
         }
 
         __host__ operator TexturePtr<T, R>() const {
-            return TexturePtr<T, R>(texture->get());
+            if (texture)
+                return TexturePtr<T, R>(texture->get());
+            else
+                return TexturePtr<T, R>(cudaTextureObject_t());
         }
 
         int rows = 0;
