@@ -54,12 +54,12 @@ namespace cv {  namespace cudev {
         __host__ TexturePtr() {};
         __host__ TexturePtr(const cudaTextureObject_t tex_) : tex(tex_) {};
         __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
-            const R retVal = tex2D<uint2>(tex, x, y);
-            return *(reinterpret_cast<R*>(&retVal));
+            const uint2 retVal = tex2D<uint2>(tex, x, y);
+            return *(reinterpret_cast<const R*>(&retVal));
         }
         __device__ __forceinline__ R operator ()(index_type x) const {
-            const R retVal = tex1Dfetch<uint2>(tex, x);
-            return *(reinterpret_cast<R*>(&retVal));
+            const uint2 retVal = tex1Dfetch<uint2>(tex, x);
+            return *(reinterpret_cast<const R*>(&retVal));
         }
     private:
         cudaTextureObject_t tex;
@@ -104,7 +104,7 @@ namespace cv {  namespace cudev {
         __host__ UniqueTexture(const size_t sizeInBytes, T* data, const bool normalizedCoords = false, const cudaTextureFilterMode filterMode = cudaFilterModePoint,
             const cudaTextureAddressMode addressMode = cudaAddressModeClamp, const cudaTextureReadMode readMode = cudaReadModeElementType)
         {
-            create(1, sizeInBytes/sizeof(T), data, sizeInBytes, normalizedCoords, filterMode, addressMode, readMode);
+            create(1, static_cast<int>(sizeInBytes/sizeof(T)), data, sizeInBytes, normalizedCoords, filterMode, addressMode, readMode);
         }
 
         __host__ ~UniqueTexture() {
