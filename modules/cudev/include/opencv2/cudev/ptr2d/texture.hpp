@@ -54,10 +54,12 @@ namespace cv {  namespace cudev {
         __host__ TexturePtr() {};
         __host__ TexturePtr(const cudaTextureObject_t tex_) : tex(tex_) {};
         __device__ __forceinline__ R operator ()(index_type y, index_type x) const {
-            return *(reinterpret_cast<R*>(&tex2D<uint2>(tex, x, y)));
+            const R retVal = tex2D<uint2>(tex, x, y);
+            return *(reinterpret_cast<R*>(&retVal));
         }
         __device__ __forceinline__ R operator ()(index_type x) const {
-            return *(reinterpret_cast<R*>(&tex1Dfetch<uint2>(tex, x)));
+            const R retVal = tex2D<uint2>(tex, x);
+            return *(reinterpret_cast<R*>(&retVal));
         }
     private:
         cudaTextureObject_t tex;
@@ -137,7 +139,7 @@ namespace cv {  namespace cudev {
             return tex;
         }
 
-        __host__ explicit operator bool() const noexcept { return tex != cudaTextureObect_t(); }
+        __host__ explicit operator bool() const noexcept { return tex != cudaTextureObject_t(); }
 
     private:
 
