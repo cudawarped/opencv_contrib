@@ -822,9 +822,6 @@ NCVStatus NCVBroxOpticalFlow(const NCVBroxOpticalFlowDescriptor desc,
             ncvAssertCUDAReturn(cudaMemsetAsync(du.ptr(), 0, kLevelSizeInBytes, stream), NCV_CUDA_ERROR);
             ncvAssertCUDAReturn(cudaMemsetAsync(dv.ptr(), 0, kLevelSizeInBytes, stream), NCV_CUDA_ERROR);
 
-            //texture format descriptor
-            cudaChannelFormatDesc ch_desc = cudaCreateChannelDesc<float>();
-
             I0 = *img0Iter;
             I1 = *img1Iter;
 
