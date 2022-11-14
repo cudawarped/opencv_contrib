@@ -998,7 +998,7 @@ namespace pyrlk
 //};
 
 // FilterModeLinear only works with floating point return tpe
-template<int cn, class T> class TextureLinear : public cv::cudev::Texture<typename TypeVec<T, cn>::vec_type, TypeVec<float, cn>::vec_type> {
+template<int cn, class T> class TextureLinear : public cv::cudev::Texture<typename TypeVec<T, cn>::vec_type, typename TypeVec<float, cn>::vec_type> {
 public:
     typedef typename TypeVec<T, cn>::vec_type elem_type;
     typedef typename TypeVec<float, cn>::vec_type ret_type;
@@ -1027,7 +1027,7 @@ public:
 //};
 
 // cudaReadModeNormalizedFloat doesn't work if data is a float
-template<int cn> class TextureLinear<cn,float> : public cv::cudev::Texture<typename TypeVec<float, cn>::vec_type, TypeVec<float, cn>::vec_type>
+template<int cn> class TextureLinear<cn,float> : public cv::cudev::Texture<typename TypeVec<float, cn>::vec_type, typename TypeVec<float, cn>::vec_type>
 {
 public:
     //__host__ TextureLinear(const int rows, const int cols, float* data, const size_t step, const bool normalizedCoords = false, const cudaTextureAddressMode addressMode = cudaAddressModeClamp) :
