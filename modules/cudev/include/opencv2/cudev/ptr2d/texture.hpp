@@ -58,7 +58,7 @@ namespace cv {  namespace cudev {
             return *(reinterpret_cast<R*>(&retVal));
         }
         __device__ __forceinline__ R operator ()(index_type x) const {
-            const R retVal = tex2D<uint2>(tex, x);
+            const R retVal = tex1Dfetch<uint2>(tex, x);
             return *(reinterpret_cast<R*>(&retVal));
         }
     private:
