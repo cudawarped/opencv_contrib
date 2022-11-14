@@ -137,12 +137,12 @@ namespace cv {  namespace cudev {
             return tex;
         }
 
-        __host__ explicit operator bool() const noexcept { return tex != cudaTextureect_t(); }
+        __host__ explicit operator bool() const noexcept { return tex != cudaTextureObect_t(); }
 
     private:
 
-        template <class T>
-        __host__ void create(const int rows, const int cols, T* data, const size_t step, const bool normalizedCoords, const cudaTextureFilterMode filterMode,
+        template <class T1>
+        __host__ void create(const int rows, const int cols, T1* data, const size_t step, const bool normalizedCoords, const cudaTextureFilterMode filterMode,
             const cudaTextureAddressMode addressMode, const cudaTextureReadMode readMode)
         {
             cudaResourceDesc texRes;
@@ -152,7 +152,7 @@ namespace cv {  namespace cudev {
                 texRes.resType = cudaResourceTypeLinear;
                 texRes.res.linear.devPtr = data;
                 texRes.res.linear.sizeInBytes = step;
-                texRes.res.linear.desc = cudaCreateChannelDesc<T>();
+                texRes.res.linear.desc = cudaCreateChannelDesc<T1>();
             }
             else {
                 texRes.resType = cudaResourceTypePitch2D;
@@ -160,7 +160,7 @@ namespace cv {  namespace cudev {
                 texRes.res.pitch2D.height = rows;
                 texRes.res.pitch2D.width = cols;
                 texRes.res.pitch2D.pitchInBytes = step;
-                texRes.res.pitch2D.desc = cudaCreateChannelDesc<T>();
+                texRes.res.pitch2D.desc = cudaCreateChannelDesc<T1>();
             }
 
             cudaTextureDesc texDescr;
