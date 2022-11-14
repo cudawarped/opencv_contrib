@@ -241,6 +241,8 @@ namespace
 
         SURF_CUDA& surf_;
 
+        GpuMat img;
+
         int img_cols, img_rows;
 
         bool use_mask;
@@ -249,7 +251,6 @@ namespace
         int maxFeatures;
 
         GpuMat counters;
-        GpuMat img;
     };
 }
 
