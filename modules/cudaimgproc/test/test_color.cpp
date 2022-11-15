@@ -2462,11 +2462,7 @@ CUDA_TEST_P(Demosaicing, BayerGR2BGR_MHT)
     mosaic(img, src, cv::Point(1, 0));
 
     cv::cuda::GpuMat dst;
-    //Size sz; Point ofs;
-    //cv::cuda::GpuMat srcDevice = createMat(src.size(), src.type(), sz, ofs, useRoi);
-    //srcDevice.upload(src);
     cv::cuda::demosaicing(loadMat(src, useRoi), dst, cv::cuda::COLOR_BayerGR2BGR_MHT);
-    //Rect roi(ofs, sz);
     EXPECT_MAT_SIMILAR(img, dst, 5e-3);
 }
 

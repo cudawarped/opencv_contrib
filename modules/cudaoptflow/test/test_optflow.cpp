@@ -458,7 +458,6 @@ CUDA_TEST_P(OpticalFlowDual_TVL1, Async)
         d_alg->calc(loadMat(frame0), loadMat(frame1), d_flow_gold);
 
         // Asynchronous call
-        std::printf("Start of Async calls\n\n\n");
         cv::cuda::GpuMat d_flow[NUM_STREAMS];
         cv::parallel_for_(cv::Range(0, NUM_STREAMS), TVL1AsyncParallelLoopBody(loadMat(frame0), loadMat(frame1), d_flow, iterations, gamma));
 

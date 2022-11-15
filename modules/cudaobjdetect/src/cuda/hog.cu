@@ -46,7 +46,7 @@
 #include "opencv2/core/cuda/reduce.hpp"
 #include "opencv2/core/cuda/functional.hpp"
 #include "opencv2/core/cuda/warp_shuffle.hpp"
-#include "opencv2/cudev.hpp"
+#include  <opencv2/cudev/ptr2d/texture.hpp>
 
 namespace cv { namespace cuda { namespace device
 {
@@ -835,7 +835,7 @@ namespace cv { namespace cuda { namespace device
                 dst.ptr(y)[x] = src(x * sx, y * sy) * 255;
         }
 
-        __global__ void resize_for_hog_kernel(cv::cudev::TexturePtr<uchar4> src, float sx, float sy, PtrStepSz<uchar4> dst)
+        __global__ void resize_for_hog_kernel(cv::cudev::TexturePtr<uchar, uchar4> src, float sx, float sy, PtrStepSz<uchar4> dst)
         {
             unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
             unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -848,11 +848,9 @@ namespace cv { namespace cuda { namespace device
         }
 
         template<class T>
-        static void resize_for_hog(const GpuMat& src, PtrStepSzb dst)
+        static void resize_for_hog(const PtrStepSzb& src, PtrStepSzb dst)
         {
-            cv::cudev::Texture<T> tex(src, false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat);
-            cudaChannelFormatDesc desc = cudaCreateChannelDesc<T>();
-
+            cv::cudev::Texture<uchar, T> tex(src.rows, src.cols, src.data, src.step, false, cudaFilterModeLinear, cudaAddressModeClamp, cudaReadModeNormalizedFloat);
             dim3 threads(32, 8);
             dim3 grid(divUp(dst.cols, threads.x), divUp(dst.rows, threads.y));
 
@@ -864,8 +862,8 @@ namespace cv { namespace cuda { namespace device
             cudaSafeCall( cudaDeviceSynchronize() );
         }
 
-        void resize_8UC1(const GpuMat& src, PtrStepSzb dst) { resize_for_hog<uchar> (src, dst); }
-        void resize_8UC4(const GpuMat& src, PtrStepSzb dst) { resize_for_hog<uchar4>(src, dst); }
+        void resize_8UC1(const PtrStepSzb& src, PtrStepSzb dst) { resize_for_hog<uchar> (src, dst); }
+        void resize_8UC4(const PtrStepSzb& src, PtrStepSzb dst) { resize_for_hog<uchar4>(src, dst); }
     } // namespace hog
 }}} // namespace cv { namespace cuda { namespace cudev
 

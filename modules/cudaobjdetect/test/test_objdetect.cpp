@@ -246,7 +246,6 @@ struct CalTech : public ::testing::TestWithParam<tuple<cv::cuda::DeviceInfo, std
 CUDA_TEST_P(CalTech, HOG)
 {
     cv::cuda::GpuMat d_img(img);
-    //GpuMat d_img;  cv::cvtColor(d_img1, d_img, COLOR_GRAY2BGRA);
     cv::Mat markedImage(img.clone());
 
     cv::Ptr<cv::cuda::HOG> d_hog = cv::cuda::HOG::create();

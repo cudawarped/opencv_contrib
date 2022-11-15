@@ -119,12 +119,12 @@ PARAM_TEST_CASE(HoughLinesProbabilistic, DeviceInfo, Size, UseRoi)
 {
     cv::cuda::DeviceInfo devInfo;
     bool useRoi;
-    Size sz;
+    Size size;
 
     virtual void SetUp()
     {
         devInfo = GET_PARAM(0);
-        sz = GET_PARAM(1);
+        size = GET_PARAM(1);
         useRoi = GET_PARAM(2);
         cv::cuda::setDevice(devInfo.deviceID());
     }
@@ -152,11 +152,6 @@ PARAM_TEST_CASE(HoughLinesProbabilistic, DeviceInfo, Size, UseRoi)
 
 CUDA_TEST_P(HoughLinesProbabilistic, Accuracy)
 {
-    //const cv::cuda::DeviceInfo devInfo = GET_PARAM(0);
-    //cv::cuda::setDevice(devInfo.deviceID());
-    const cv::Size size = GET_PARAM(1);
-    const bool useRoi = GET_PARAM(2);
-
     const float rho = 1.0f;
     const float theta = (float) (1.0 * CV_PI / 180.0);
     const int minLineLength = 15;
@@ -181,59 +176,32 @@ CUDA_TEST_P(HoughLinesProbabilistic, Accuracy)
 
 }
 
-
-
-
-//PARAM_TEST_CASE(HoughLinesProbabilistic, cv::cuda::DeviceInfo)
-//{
-//    cv::cuda::DeviceInfo devInfo;
-//
-//    virtual void SetUp()
-//    {
-//        devInfo = GET_PARAM(0);
-//        cv::cuda::setDevice(devInfo.deviceID());
-//    }
-//};
-
 void HoughLinesProbabilisticThread(const Ptr<HoughSegmentDetector> detector, const GpuMat& imgIn, const std::vector<GpuMat>& linesOut, Stream& stream) {
     for (auto& lines : linesOut)
         detector->detect(imgIn, lines, stream);
     stream.waitForCompletion();
-    //for (auto& imgOut : imgsOut)
-    //    cv::cuda::resize(imgIn, imgOut, imgOut.size(), 0, 0, interp, stream);
 }
 
 CUDA_TEST_P(HoughLinesProbabilistic, Async)
 {
     constexpr int nThreads = 5;
     constexpr int nIters = 5;
-    const Size sz(100, 100);
-    //const Size szOut(200, 200);
     vector<Stream> streams(nThreads); // async test only
     vector<GpuMat> imgsIn;
     vector<Ptr<HoughSegmentDetector>> detectors;
-    //vector<vector<GpuMat>> imgsOut;
-
     vector<vector<GpuMat>> linesOut(nThreads);
-
-
     const float rho = 1.0f;
     const float theta = (float)(1.0 * CV_PI / 180.0);
     const int minLineLength = 15;
     const int maxLineGap = 8;
 
-    cv::Mat src(sz, CV_8UC1);
+    cv::Mat src(size, CV_8UC1);
     generateLines(src);
 
     for (int i = 0; i < nThreads; i++) {
         imgsIn.push_back(loadMat(src, useRoi));
         detectors.push_back(createHoughSegmentDetector(rho, theta, minLineLength, maxLineGap));
         linesOut.push_back(vector<GpuMat>(nIters));
-        //vector<GpuMat> lines;
-        //
-        //for (int j = 0; j < nIters; j++)
-        //    imgsOutPerThread.push_back(GpuMat(szOut, CV_8UC1));
-        //imgsOut.push_back(imgsOutPerThread);
     }
 
     vector<std::thread> thread(nThreads);
@@ -245,70 +213,17 @@ CUDA_TEST_P(HoughLinesProbabilistic, Async)
         std::vector<cv::Vec2f> lines;
         for (const auto& line : linesOut.at(i)) {
             line.download(linesSegment);
-            cv::Mat dst(sz, CV_8UC1);
+            cv::Mat dst(size, CV_8UC1);
             drawLines(dst, linesSegment);
             ASSERT_MAT_NEAR(src, dst, 0.0);
         }
     }
-
-
-
-
-    //    GpuMat imgOutGs;
-    //    cv::cuda::resize(imgsIn.at(i), imgOutGs, szOut, 0, 0, interpolation, streams.at(i));
-    //    Mat imgOutGsHost; imgOutGs.download(imgOutGsHost);
-    //    for (const auto& imgOut : imgsOut.at(i)) {
-    //        Mat imgOutHost; imgOut.download(imgOutHost);
-    //        ASSERT_TRUE(cv::norm(imgOutHost, imgOutGsHost, NORM_INF) == 0);
-    //    }
-    //}
-
-
-    //std::vector<cv::Vec4i> linesSegment;
-    //std::vector<cv::Vec2f> lines;
-    //d_lines.download(linesSegment);
-
-    //cv::Mat dst(size, CV_8UC1);
-    //drawLines(dst, linesSegment);
-
-    //ASSERT_MAT_NEAR(src, dst, 0.0);
-    //hough->detect(loadMat(src, useRoi), d_lines);
-
-    //const cv::Size size = GET_PARAM(1);
-    //const bool useRoi = GET_PARAM(2);
-
-
-
-    //Ptr<cv::cuda::HoughSegmentDetector> hough = cv::cuda::createHoughSegmentDetector(rho, theta, minLineLength, maxLineGap);
-
-
-
-
-
-    //for (int i = 0; i < nThreads; i++) {
-    //    imgsIn.push_back(GpuMat(szIn, CV_8UC1, i));
-    //    vector<GpuMat> imgsOutPerThread;
-    //    for (int j = 0; j < nIters; j++)
-    //        imgsOutPerThread.push_back(GpuMat(szOut, CV_8UC1));
-    //    imgsOut.push_back(imgsOutPerThread);
-    //}
-
-
 }
 
 INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, HoughLinesProbabilistic, testing::Combine(
     ALL_DEVICES,
     DIFFERENT_SIZES,
     WHOLE_SUBMAT));
-
-
-//INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, HoughLinesProbabilistic, testing::Combine(
-//    ALL_DEVICES,
-//    testing::Values(Interpolation(cv::INTER_NEAREST), Interpolation(cv::INTER_LINEAR), Interpolation(cv::INTER_CUBIC))));
-
-
-
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // HoughCircles

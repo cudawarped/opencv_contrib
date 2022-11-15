@@ -214,7 +214,7 @@ CUDA_TEST_P(ORB, Accuracy)
             cv::cuda::ORB::create(nFeatures, scaleFactor, nLevels, edgeThreshold, firstLevel,
                                   WTA_K, scoreType, patchSize, 20, blurForDescriptor);
 
-    if (supportFeature(devInfo, cv::cuda::GLOBAL_ATOMICS))
+    if (!supportFeature(devInfo, cv::cuda::GLOBAL_ATOMICS))
     {
         try
         {

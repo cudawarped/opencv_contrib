@@ -13,14 +13,7 @@
 #include <opencv2/core/cuda/vec_traits.hpp>
 #include <opencv2/core/utils/logger.hpp>
 
-//  NEED COMMENT IN EXISTING TEXTURE THAT UNSAFE TO PASS TO KERNELS SEE EXAMPLE USAGE ....
-
 /** \file texture_object.hpp
-* Textures objects cannot be passed to kernel objects, destructed before ...
-* Ensures handle is destroyed after use and not destroyed
-* Texture object ... which cannot be accidently passed to nncc compiled coded -> TexturePtr lightweight struct which can be passed
-* Texture can be copied, unique cannot -> if accidently copied what happens?
-* Unique should not be moved to kernel.
 */
 
 namespace cv {  namespace cudev {
@@ -29,7 +22,7 @@ namespace cv {  namespace cudev {
 //! @{
 
     /** @brief Simple lightweight structures that encapsulates information about an image texture on the device.
-    * They are intended to pass to nvcc-compiled code. It is unsafe for Texture to be passed as a kernel argument, destructor will get called following stub destruction.
+    * They are intended to pass to nvcc-compiled code. It is unsafe for a Texture object to be passed as a kernel argument because destructor will be called following stub destruction.
     */
     template<class T, class R = T>
     struct TexturePtr {
@@ -81,8 +74,7 @@ namespace cv {  namespace cudev {
 
     /** @brief non-copyable smart CUDA texture object
     *
-    * UniqueTexture is a smart non-sharable wrapper for CUDA texture object handle which ensures that
-    * the handle is destroyed after use.
+    * UniqueTexture is a smart non-sharable wrapper for CUDA texture object handle which ensures that the handle is destroyed after use.
     */
     template<class T, class R = T>
     class UniqueTexture {
@@ -189,8 +181,7 @@ namespace cv {  namespace cudev {
 
     /** @brief sharable smart CUDA texture object
     *
-    * Texture is a smart sharable wrapper for CUDA texture handle which ensures that
-    * the handle is destroyed after use.
+    * Texture is a smart sharable wrapper for CUDA texture handle which ensures that the handle is destroyed after use.
     */
     template<class T, class R = T>
     class Texture {
@@ -246,11 +237,8 @@ namespace cv {  namespace cudev {
 
 
     /** @brief sharable smart CUDA texture object
-    *
-    * TextureOff is a smart sharable wrapper for CUDA texture handle which ensures that
-    * the handle is destroyed after use.
+    * TextureOff is a smart sharable wrapper for CUDA texture handle which ensures that the handle is destroyed after use.
     */
-    // Prevent slicing of TextureOffPtr to TexturePtr by not inheriting from Texture<T,R>
     template<class T, class R = T>
     class TextureOff {
     public:

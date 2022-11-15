@@ -50,13 +50,9 @@
 
 using namespace cv::cuda;
 using namespace cv::cuda::device;
-//using namespace cv::cudev;
 
 namespace optflowbm
 {
-    //texture<uchar, cudaTextureType2D, cudaReadModeElementType> tex_prev(false, cudaFilterModePoint, cudaAddressModeClamp);
-    //texture<uchar, cudaTextureType2D, cudaReadModeElementType> tex_curr(false, cudaFilterModePoint, cudaAddressModeClamp);
-
     __device__ int cmpBlocks(cv::cudev::TexturePtr<uchar> texCurr, cv::cudev::TexturePtr<uchar> texPrev, int X1, int Y1, int X2, int Y2, int2 blockSize)
     {
         int s = 0;
@@ -65,7 +61,6 @@ namespace optflowbm
         {
             for (int x = 0; x < blockSize.x; ++x)
                 s += ::abs(texPrev(Y1 + y, X1 + x) -texCurr(Y2 + y, X2 + x));
-                //s += ::abs(tex2D(tex_prev, X1 + x, Y1 + y) - tex2D(tex_curr, X2 + x, Y2 + y));
         }
 
         return s;
@@ -154,18 +149,12 @@ namespace optflowbm
     void calc(PtrStepSzb prev, PtrStepSzb curr, PtrStepSzf velx, PtrStepSzf vely, int2 blockSize, int2 shiftSize, bool usePrevious,
               int maxX, int maxY, int acceptLevel, int escapeLevel, const short2* ss, int ssCount, cudaStream_t stream)
     {
-        //bindTexture(&tex_prev, prev);
-        //bindTexture(&tex_curr, curr);
         cv::cudev::Texture<uchar> texPrev(prev);
         cv::cudev::Texture<uchar> texCurr(curr);
-
         const dim3 block(32, 8);
         const dim3 grid(divUp(velx.cols, block.x), divUp(vely.rows, block.y));
-
-        calcOptFlowBM<<<grid, block, 0, stream>>>(texPrev, texCurr, velx, vely, blockSize, shiftSize, usePrevious,
-                                                  maxX, maxY, acceptLevel,  escapeLevel, ss, ssCount);
+        calcOptFlowBM<<<grid, block, 0, stream>>>(texPrev, texCurr, velx, vely, blockSize, shiftSize, usePrevious, maxX, maxY, acceptLevel,  escapeLevel, ss, ssCount);
         cudaSafeCall( cudaGetLastError() );
-
         if (stream == 0)
             cudaSafeCall( cudaDeviceSynchronize() );
     }

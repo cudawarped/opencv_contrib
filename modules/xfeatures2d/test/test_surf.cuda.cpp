@@ -130,7 +130,7 @@ CUDA_TEST_P(CUDA_SURF, Detector_Masked)
     std::vector<cv::KeyPoint> keypoints_gold;
     surf_gold->detect(image, keypoints_gold, mask);
 
-    ASSERT_EQ(keypoints_gold.size(),keypoints.size());
+    ASSERT_EQ(keypoints_gold.size(), keypoints.size());
     int matchedCount = getMatchedPointsCount(keypoints_gold, keypoints);
     double matchedRatio = static_cast<double>(matchedCount) / keypoints_gold.size();
 

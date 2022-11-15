@@ -43,7 +43,7 @@
 #if !defined CUDA_DISABLER
 
 #include "opencv2/core/cuda/common.hpp"
-#include "opencv2/cudev/ptr2d/texture.hpp"
+#include <opencv2/cudev/ptr2d/texture.hpp>
 #include <limits.h>
 
 
@@ -603,14 +603,8 @@ namespace cv { namespace cuda { namespace device
         /////////////////////////////////// Textureness filtering ////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////////////////
 
-        //texture<unsigned char, 2, cudaReadModeNormalizedFloat> texForTF;
-
         __device__ __forceinline__ float sobel(cv::cudev::TexturePtr<uchar, float> src, int x, int y)
         {
-            //float conv = tex2D(texForTF, x - 1, y - 1) * (-1) + tex2D(texForTF, x + 1, y - 1) * (1) +
-            //             tex2D(texForTF, x - 1, y    ) * (-2) + tex2D(texForTF, x + 1, y    ) * (2) +
-            //             tex2D(texForTF, x - 1, y + 1) * (-1) + tex2D(texForTF, x + 1, y + 1) * (1);
-
             float conv = src(y - 1, x - 1) * (-1) + src(y - 1, x + 1) * (1) +
                 src(y, x - 1) * (-2) + src(y, x + 1) * (2) +
                 src(y + 1, x - 1) * (-1) + src(y + 1, x + 1) * (1);
@@ -644,7 +638,6 @@ namespace cv { namespace cuda { namespace device
 
         __global__ void textureness_kernel(cv::cudev::TexturePtr<uchar,float> src, PtrStepSzb disp, int winsz, float threshold)
         {
-            //cv::Matx<uchar> tmp;
             int winsz2 = winsz/2;
             int n_dirty_pixels = (winsz2) * 2;
 
@@ -705,31 +698,16 @@ namespace cv { namespace cuda { namespace device
         void postfilter_textureness(const PtrStepSzb& input, int winsz, float avgTexturenessThreshold, const PtrStepSzb& disp, cudaStream_t & stream)
         {
             avgTexturenessThreshold *= winsz * winsz;
-
-            //texForTF.filterMode     = cudaFilterModeLinear;
-            //texForTF.addressMode[0] = cudaAddressModeWrap;
-            //texForTF.addressMode[1] = cudaAddressModeWrap;
-
-            //cudaChannelFormatDesc desc = cudaCreateChannelDesc<unsigned char>();
-            //cudaSafeCall( cudaBindTexture2D( 0, texForTF, input.data, desc, input.cols, input.rows, input.step ) );
-
-            //PtrStepSz<unsigned char> tmp(input.rows, input.cols, reinterpret_cast<unsigned char*>(input.data), input.step);
             cv::cudev::Texture<unsigned char, float> tex(input, false, cudaFilterModeLinear, cudaAddressModeWrap, cudaReadModeNormalizedFloat);
-
             dim3 threads(128, 1, 1);
             dim3 grid(1, 1, 1);
-
             grid.x = divUp(input.cols, threads.x);
             grid.y = divUp(input.rows, RpT);
-
             size_t smem_size = (threads.x + threads.x + (winsz/2) * 2 ) * sizeof(float);
             textureness_kernel<<<grid, threads, smem_size, stream>>>(tex, disp, winsz, avgTexturenessThreshold);
             cudaSafeCall( cudaGetLastError() );
-
             if (stream == 0)
                 cudaSafeCall( cudaDeviceSynchronize() );
-
-            //cudaSafeCall( cudaUnbindTexture (texForTF) );
         }
     } // namespace stereobm
 }}} // namespace cv { namespace cuda { namespace cudev

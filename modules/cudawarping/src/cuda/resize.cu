@@ -49,9 +49,7 @@
 #include "opencv2/core/cuda/vec_math.hpp"
 #include "opencv2/core/cuda/saturate_cast.hpp"
 #include "opencv2/core/cuda/filters.hpp"
-#include "opencv2/cudev/ptr2d/texture.hpp"
-
-using namespace cv::cudev;
+#include <opencv2/cudev/ptr2d/texture.hpp>
 
 namespace cv { namespace cuda { namespace device
 {
@@ -108,8 +106,6 @@ namespace cv { namespace cuda { namespace device
         }
     }
 
-    //template <class Ptr2D, typename T> __global__ void resize(const Ptr2D src, PtrStepSz<T> dst, const float fy, const float fx)
-
     template <class Ptr2D, typename T> __global__ void resize(Ptr2D src, PtrStepSz<T> dst, const float fy, const float fx)
     {
         const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
@@ -135,23 +131,6 @@ namespace cv { namespace cuda { namespace device
         }
     }
 
-    //template <class T> struct TextureAccessor
-    //{
-    //    TextureAccessor(const PtrStepSz<T>& src, const int yoff_, const int xoff_) :
-    //        tex(cv::cudev::globPtr(src.data, src.step, src.rows, src.cols), false, cudaFilterModePoint, cudaAddressModeClamp), yoff(yoff_), xoff(xoff_) {};
-
-    //    cv::cudev::Texture<T> tex;
-    //    typedef T elem_type;
-    //    typedef int index_type;
-    //    int yoff;
-    //    int xoff;
-
-    //    __device__ __forceinline__ elem_type operator ()(index_type y, index_type x) const
-    //    {
-    //        return tex(y + yoff, x + xoff);
-    //    }
-    //};
-
     // callers for nearest interpolation
 
     template <typename T>
@@ -168,36 +147,19 @@ namespace cv { namespace cuda { namespace device
     }
 
     template <typename T>
-    void call_resize_nearest_tex(const PtrStepSz<T>& /*src*/, const PtrStepSz<T>& srcWhole, int yoff, int xoff, const PtrStepSz<T>& dst, float fy, float fx)
+    void call_resize_nearest_tex(const PtrStepSz<T>& srcWhole, int yoff, int xoff, const PtrStepSz<T>& dst, float fy, float fx)
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
         if (xoff || yoff) {
-            TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
-            //typename PtrTraits<SrcPtr>::ptr_type
-            //TextureObjOffPtr<T> tmp = texSrcWhole;
-
-            resize<TextureOffPtr<T>> << <grid, block >> > (texSrcWhole, dst, fy, fx);
-            //resize << <grid, block >> > (PtrTraits<TextureObjOff<T>>::ptr_type(texSrcWhole), dst, fy, fx);
-            //resize<TextureObjOff<T>> << <grid, block >> > (texSrcWhole, dst, fy, fx);
+            cudev::TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
+            resize<cudev::TextureOffPtr<T>> << <grid, block >> > (texSrcWhole, dst, fy, fx);
         }
         else {
-            //resize << <grid, block >> > (texSrcWhole, dst, fy, fx);
-            Texture<T> texSrcWhole(srcWhole);
-            resize<TexturePtr<T>> << <grid, block >> > (texSrcWhole, dst, fy, fx);
-            //resize<TextureObj<T>> <<<grid, block >>> (texSrcWhole, dst, fy, fx);
+            cudev::Texture<T> texSrcWhole(srcWhole);
+            resize<cudev::TexturePtr<T>> << <grid, block >> > (texSrcWhole, dst, fy, fx);
         }
-
-        //if (xoff || yoff) {
-        //    cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
-        //    resize << <grid, block >> > (texSrcWhole, dst, fy, fx);
-        //}
-        //else {
-        //    cudev::TextureAccessor<T> texSrcWhole(srcWhole);
-        //    resize << <grid, block >> > (texSrcWhole, dst, fy, fx);
-        //}
         cudaSafeCall( cudaGetLastError() );
-
         cudaSafeCall( cudaDeviceSynchronize() );
     }
 
@@ -221,41 +183,21 @@ namespace cv { namespace cuda { namespace device
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-        //Texture<T> texSrcWhole(srcWhole, yoff, xoff);
-
         if (srcWhole.data == src.data)
         {
-            Texture<T> texSrc(src);
-            //cudev::TextureAccessor<T> texSrc(src);
-            LinearFilter< TexturePtr<T> > filteredSrc(texSrc);
+            cudev::Texture<T> texSrc(src);
+            LinearFilter< cudev::TexturePtr<T> > filteredSrc(texSrc);
             resize << <grid, block >> > (filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureOffPtr<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            LinearFilter< BorderReader<TextureOffPtr<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
+            BorderReader<cudev::TextureOffPtr<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            LinearFilter< BorderReader<cudev::TextureOffPtr<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
             resize << <grid, block >> > (filteredSrc, dst, fy, fx);
         }
-
-        //if (srcWhole.data == src.data)
-        //{
-        //    cudev::TextureAccessor<T> texSrc(src);
-        //    LinearFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
-        //    resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
-        //}
-        //else
-        //{
-        //    cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
-        //    BrdReplicate<T> brd(src.rows, src.cols);
-        //    BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-        //    LinearFilter< BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
-        //    resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
-        //}
-
         cudaSafeCall( cudaGetLastError() );
-
         cudaSafeCall( cudaDeviceSynchronize() );
     }
 
@@ -283,41 +225,21 @@ namespace cv { namespace cuda { namespace device
     {
         const dim3 block(32, 8);
         const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
-
-
         if (srcWhole.data == src.data)
         {
-            Texture<T> texSrc(src);
-            CubicFilter< TexturePtr<T> > filteredSrc(texSrc);
+            cudev::Texture<T> texSrc(src);
+            CubicFilter< cudev::TexturePtr<T> > filteredSrc(texSrc);
             resize << <grid, block >> > (filteredSrc, dst, fy, fx);
         }
         else
         {
-            TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
+            cudev::TextureOff<T> texSrcWhole(srcWhole, yoff, xoff);
             BrdReplicate<T> brd(src.rows, src.cols);
-            BorderReader<TextureOffPtr<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-            CubicFilter<BorderReader<TextureOffPtr<T>, BrdReplicate<T> >> filteredSrc(brdSrc);
-            //CubicFilter< BorderReader<TextureObjOffPtr<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
+            BorderReader<cudev::TextureOffPtr<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
+            CubicFilter<BorderReader<cudev::TextureOffPtr<T>, BrdReplicate<T> >> filteredSrc(brdSrc);
             resize << <grid, block >> > (filteredSrc, dst, fy, fx);
         }
-
-        //if (srcWhole.data == src.data)
-        //{
-        //    cudev::TextureAccessor<T> texSrc(src);
-        //    CubicFilter< cudev::TextureAccessor<T> > filteredSrc(texSrc);
-        //    resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
-        //}
-        //else
-        //{
-        //    cudev::TextureAccessorOffset<T> texSrcWhole(srcWhole, yoff, xoff);
-        //    BrdReplicate<T> brd(src.rows, src.cols);
-        //    BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > brdSrc(texSrcWhole, brd);
-        //    CubicFilter< BorderReader<cudev::TextureAccessorOffset<T>, BrdReplicate<T> > > filteredSrc(brdSrc);
-        //    resize<<<grid, block>>>(filteredSrc, dst, fy, fx);
-        //}
-
         cudaSafeCall( cudaGetLastError() );
-
         cudaSafeCall( cudaDeviceSynchronize() );
     }
 
@@ -342,7 +264,7 @@ namespace cv { namespace cuda { namespace device
                 if (fx > 1 || fy > 1)
                     call_resize_nearest_glob(src, dst, fy, fx, 0);
                 else
-                   call_resize_nearest_tex(src, srcWhole, yoff, xoff, dst, fy, fx);
+                   call_resize_nearest_tex(srcWhole, yoff, xoff, dst, fy, fx);
             }
         }
     };

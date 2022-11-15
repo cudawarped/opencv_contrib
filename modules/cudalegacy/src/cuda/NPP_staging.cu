@@ -66,7 +66,6 @@ cudaStream_t nppStGetActiveCUDAstream(void)
 }
 
 
-
 cudaStream_t nppStSetActiveCUDAstream(cudaStream_t cudaStream)
 {
     cudaStream_t tmp = nppStream;
@@ -118,7 +117,6 @@ inline __device__ T readElem(cv::cudev::TexturePtr<Ncv8u> tex8u, T *d_src, Ncv32
 template<>
 inline __device__ Ncv8u readElem<Ncv8u>(cv::cudev::TexturePtr<Ncv8u> tex8u, Ncv8u* d_src, Ncv32u texOffs, Ncv32u srcStride, Ncv32u curElemOffs)
 {
-    //return tex1Dfetch(tex8u, texOffs + srcStride * blockIdx.x + curElemOffs);
     return tex8u(texOffs + srcStride * blockIdx.x + curElemOffs);
 }
 
@@ -156,8 +154,7 @@ inline __device__ Ncv32f readElem<Ncv32f>(cv::cudev::TexturePtr<Ncv8u> tex8u, Nc
 * \return None
 */
 template <class T_in, class T_out, bool tbDoSqr>
-__global__ void scanRows(cv::cudev::TexturePtr<Ncv8u> tex8u, T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u srcStride,
-                         T_out *d_II, Ncv32u IIstride)
+__global__ void scanRows(cv::cudev::TexturePtr<Ncv8u> tex8u, T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u srcStride, T_out *d_II, Ncv32u IIstride)
 {
     //advance pointers to the current line
     if (sizeof(T_in) != 1)
@@ -221,13 +218,8 @@ NCVStatus scanRowsWrapperDevice(T_in *d_src, Ncv32u srcStride,
                                 T_out *d_dst, Ncv32u dstStride, NcvSize32u roi)
 {
     cv::cudev::Texture<Ncv8u> tex8u(static_cast<size_t>(roi.height * srcStride), (Ncv8u*)d_src);
-    scanRows
-        <T_in, T_out, tbDoSqr>
-        <<<roi.height, NUM_SCAN_THREADS, 0, nppStGetActiveCUDAstream()>>>
-        (tex8u, d_src, 0, roi.width, srcStride, d_dst, dstStride);
-
+    scanRows <T_in, T_out, tbDoSqr> <<<roi.height, NUM_SCAN_THREADS, 0, nppStGetActiveCUDAstream()>>> (tex8u, d_src, 0, roi.width, srcStride, d_dst, dstStride);
     ncvAssertCUDALastErrorReturn(NPPST_CUDA_KERNEL_EXECUTION_ERROR);
-
     return NPPST_SUCCESS;
 }
 
@@ -610,11 +602,10 @@ static NCVStatus decimateWrapperDevice(T *d_src, Ncv32u srcStep,
     dim3 grid((dstRoi.width + NUM_DOWNSAMPLE_NEAREST_THREADS_X - 1) / NUM_DOWNSAMPLE_NEAREST_THREADS_X,
               (dstRoi.height + NUM_DOWNSAMPLE_NEAREST_THREADS_Y - 1) / NUM_DOWNSAMPLE_NEAREST_THREADS_Y);
     dim3 block(NUM_DOWNSAMPLE_NEAREST_THREADS_X, NUM_DOWNSAMPLE_NEAREST_THREADS_Y);
-    if (!readThruTexture)
-    {
+    if (!readThruTexture) {
         decimate_C1R<T><<<grid, block, 0, nppStGetActiveCUDAstream()>>>(d_src, srcStep, d_dst, dstStep, dstRoi, scale);
     }
-    else{
+    else {
         cv::cudev::Texture<T> texSrc(srcRoi.height * srcStep * sizeof(T), d_src);
         decimate_C1R<T> << <grid, block, 0, nppStGetActiveCUDAstream() >> > (texSrc, srcStep, d_dst, dstStep, dstRoi, scale);
     }
