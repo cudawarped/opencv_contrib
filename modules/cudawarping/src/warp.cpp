@@ -45,6 +45,15 @@
 using namespace cv;
 using namespace cv::cuda;
 
+#define USE_NPP_STREAM_CONTEXT NPP_VERSION >= (10 * 1000 + 1 * 100 + 0)
+#if USE_NPP_STREAM_CONTEXT
+    #define CTX_PREFIX _Ctx
+#else
+    #define CTX_PREFIX
+#endif
+#define PPCAT_NX(A, B) A ## B
+#define PPCAT(A, B) PPCAT_NX(A, B)
+#define TRY_CTX(func) PPCAT(func, CTX_PREFIX)
 #if !defined HAVE_CUDA || defined(CUDA_DISABLER)
 
 void cv::cuda::warpAffine(InputArray, OutputArray, InputArray, Size, int, int, Scalar, Stream&) { throw_no_cuda(); }
@@ -138,10 +147,12 @@ namespace
     template <int DEPTH> struct NppWarpFunc
     {
         typedef typename NPPTypeTraits<DEPTH>::npp_type npp_type;
-
-        typedef NppStatus (*func_t)(const npp_type* pSrc, NppiSize srcSize, int srcStep, NppiRect srcRoi, npp_type* pDst,
-                                    int dstStep, NppiRect dstRoi, const double coeffs[][3],
-                                    int interpolation);
+#if USE_NPP_STREAM_CONTEXT
+        typedef NppStatus (*func_t)(const npp_type* pSrc, NppiSize srcSize, int srcStep, NppiRect srcRoi, npp_type* pDst, int dstStep, NppiRect dstRoi, const double coeffs[][3], int interpolation,
+            NppStreamContext stream_ctx);
+#else
+        typedef NppStatus(*func_t)(const npp_type* pSrc, NppiSize srcSize, int srcStep, NppiRect srcRoi, npp_type* pDst, int dstStep, NppiRect dstRoi, const double coeffs[][3], int interpolation);
+#endif
     };
 
     template <int DEPTH, typename NppWarpFunc<DEPTH>::func_t func> struct NppWarp
@@ -168,11 +179,15 @@ namespace
             dstroi.height = dst.rows;
             dstroi.width = dst.cols;
 
-            cv::cuda::NppStreamHandler h(stream);
-
-            nppSafeCall( func(src.ptr<npp_type>(), srcsz, static_cast<int>(src.step), srcroi,
-                              dst.ptr<npp_type>(), static_cast<int>(dst.step), dstroi,
-                              coeffs, npp_inter[interpolation]) );
+#if USE_NPP_STREAM_CONTEXT
+            NppStreamContext nppStreamContext{};
+            nppSafeCall(nppGetStreamContext(&nppStreamContext));
+            nppStreamContext.hStream = stream;
+            nppSafeCall(func(src.ptr<npp_type>(), srcsz, static_cast<int>(src.step), srcroi, dst.ptr<npp_type>(), static_cast<int>(dst.step), dstroi, coeffs, npp_inter[interpolation], nppStreamContext));
+#else
+            NppStreamHandler h(stream);
+            nppSafeCall(func(src.ptr<npp_type>(), srcsz, static_cast<int>(src.step), srcroi, dst.ptr<npp_type>(), static_cast<int>(dst.step), dstroi, coeffs, npp_inter[interpolation]));
+#endif
 
             if (stream == 0)
                 cudaSafeCall( cudaDeviceSynchronize() );
@@ -251,20 +266,20 @@ void cv::cuda::warpAffine(InputArray _src, OutputArray _dst, InputArray _M, Size
         static const func_t funcs[2][6][4] =
         {
             {
-                {NppWarp<CV_8U, nppiWarpAffine_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpAffine_8u_C3R>::call, NppWarp<CV_8U, nppiWarpAffine_8u_C4R>::call},
+                {NppWarp<CV_8U, TRY_CTX(nppiWarpAffine_8u_C1R)>::call, 0, NppWarp<CV_8U, TRY_CTX(nppiWarpAffine_8u_C3R)>::call, NppWarp<CV_8U, TRY_CTX(nppiWarpAffine_8u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpAffine_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpAffine_16u_C3R>::call, NppWarp<CV_16U, nppiWarpAffine_16u_C4R>::call},
+                {NppWarp<CV_16U, TRY_CTX(nppiWarpAffine_16u_C1R)>::call, 0, NppWarp<CV_16U, TRY_CTX(nppiWarpAffine_16u_C3R)>::call, NppWarp<CV_16U, TRY_CTX(nppiWarpAffine_16u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpAffine_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpAffine_32s_C3R>::call, NppWarp<CV_32S, nppiWarpAffine_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpAffine_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpAffine_32f_C3R>::call, NppWarp<CV_32F, nppiWarpAffine_32f_C4R>::call}
+                {NppWarp<CV_32S, TRY_CTX(nppiWarpAffine_32s_C1R)>::call, 0, NppWarp<CV_32S, TRY_CTX(nppiWarpAffine_32s_C3R)>::call, NppWarp<CV_32S, TRY_CTX(nppiWarpAffine_32s_C4R)>::call},
+                {NppWarp<CV_32F, TRY_CTX(nppiWarpAffine_32f_C1R)>::call, 0, NppWarp<CV_32F, TRY_CTX(nppiWarpAffine_32f_C3R)>::call, NppWarp<CV_32F, TRY_CTX(nppiWarpAffine_32f_C4R)>::call}
             },
             {
-                {NppWarp<CV_8U, nppiWarpAffineBack_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpAffineBack_8u_C3R>::call, NppWarp<CV_8U, nppiWarpAffineBack_8u_C4R>::call},
+                {NppWarp<CV_8U, TRY_CTX(nppiWarpAffineBack_8u_C1R)>::call, 0, NppWarp<CV_8U, TRY_CTX(nppiWarpAffineBack_8u_C3R)>::call, NppWarp<CV_8U, TRY_CTX(nppiWarpAffineBack_8u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpAffineBack_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpAffineBack_16u_C3R>::call, NppWarp<CV_16U, nppiWarpAffineBack_16u_C4R>::call},
+                {NppWarp<CV_16U, TRY_CTX(nppiWarpAffineBack_16u_C1R)>::call, 0, NppWarp<CV_16U, TRY_CTX(nppiWarpAffineBack_16u_C3R)>::call, NppWarp<CV_16U, TRY_CTX(nppiWarpAffineBack_16u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpAffineBack_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpAffineBack_32s_C3R>::call, NppWarp<CV_32S, nppiWarpAffineBack_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpAffineBack_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpAffineBack_32f_C3R>::call, NppWarp<CV_32F, nppiWarpAffineBack_32f_C4R>::call}
+                {NppWarp<CV_32S, TRY_CTX(nppiWarpAffineBack_32s_C1R)>::call, 0, NppWarp<CV_32S, TRY_CTX(nppiWarpAffineBack_32s_C3R)>::call, NppWarp<CV_32S, TRY_CTX(nppiWarpAffineBack_32s_C4R)>::call},
+                {NppWarp<CV_32F, TRY_CTX(nppiWarpAffineBack_32f_C1R)>::call, 0, NppWarp<CV_32F, TRY_CTX(nppiWarpAffineBack_32f_C3R)>::call, NppWarp<CV_32F, TRY_CTX(nppiWarpAffineBack_32f_C4R)>::call}
             }
         };
 
@@ -390,20 +405,20 @@ void cv::cuda::warpPerspective(InputArray _src, OutputArray _dst, InputArray _M,
         static const func_t funcs[2][6][4] =
         {
             {
-                {NppWarp<CV_8U, nppiWarpPerspective_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpPerspective_8u_C3R>::call, NppWarp<CV_8U, nppiWarpPerspective_8u_C4R>::call},
+                {NppWarp<CV_8U, TRY_CTX(nppiWarpPerspective_8u_C1R)>::call, 0, NppWarp<CV_8U, TRY_CTX(nppiWarpPerspective_8u_C3R)>::call, NppWarp<CV_8U, TRY_CTX(nppiWarpPerspective_8u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpPerspective_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpPerspective_16u_C3R>::call, NppWarp<CV_16U, nppiWarpPerspective_16u_C4R>::call},
+                {NppWarp<CV_16U, TRY_CTX(nppiWarpPerspective_16u_C1R)>::call, 0, NppWarp<CV_16U, TRY_CTX(nppiWarpPerspective_16u_C3R)>::call, NppWarp<CV_16U, TRY_CTX(nppiWarpPerspective_16u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpPerspective_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpPerspective_32s_C3R>::call, NppWarp<CV_32S, nppiWarpPerspective_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpPerspective_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpPerspective_32f_C3R>::call, NppWarp<CV_32F, nppiWarpPerspective_32f_C4R>::call}
+                {NppWarp<CV_32S, TRY_CTX(nppiWarpPerspective_32s_C1R)>::call, 0, NppWarp<CV_32S, TRY_CTX(nppiWarpPerspective_32s_C3R)>::call, NppWarp<CV_32S, TRY_CTX(nppiWarpPerspective_32s_C4R)>::call},
+                {NppWarp<CV_32F, TRY_CTX(nppiWarpPerspective_32f_C1R)>::call, 0, NppWarp<CV_32F, TRY_CTX(nppiWarpPerspective_32f_C3R)>::call, NppWarp<CV_32F, TRY_CTX(nppiWarpPerspective_32f_C4R)>::call}
             },
             {
-                {NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C1R>::call, 0, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C3R>::call, NppWarp<CV_8U, nppiWarpPerspectiveBack_8u_C4R>::call},
+                {NppWarp<CV_8U, TRY_CTX(nppiWarpPerspectiveBack_8u_C1R)>::call, 0, NppWarp<CV_8U, TRY_CTX(nppiWarpPerspectiveBack_8u_C3R)>::call, NppWarp<CV_8U, TRY_CTX(nppiWarpPerspectiveBack_8u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C1R>::call, 0, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C3R>::call, NppWarp<CV_16U, nppiWarpPerspectiveBack_16u_C4R>::call},
+                {NppWarp<CV_16U, TRY_CTX(nppiWarpPerspectiveBack_16u_C1R)>::call, 0, NppWarp<CV_16U, TRY_CTX(nppiWarpPerspectiveBack_16u_C3R)>::call, NppWarp<CV_16U, TRY_CTX(nppiWarpPerspectiveBack_16u_C4R)>::call},
                 {0, 0, 0, 0},
-                {NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C1R>::call, 0, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C3R>::call, NppWarp<CV_32S, nppiWarpPerspectiveBack_32s_C4R>::call},
-                {NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C1R>::call, 0, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C3R>::call, NppWarp<CV_32F, nppiWarpPerspectiveBack_32f_C4R>::call}
+                {NppWarp<CV_32S, TRY_CTX(nppiWarpPerspectiveBack_32s_C1R)>::call, 0, NppWarp<CV_32S, TRY_CTX(nppiWarpPerspectiveBack_32s_C3R)>::call, NppWarp<CV_32S, TRY_CTX(nppiWarpPerspectiveBack_32s_C4R)>::call},
+                {NppWarp<CV_32F, TRY_CTX(nppiWarpPerspectiveBack_32f_C1R)>::call, 0, NppWarp<CV_32F, TRY_CTX(nppiWarpPerspectiveBack_32f_C3R)>::call, NppWarp<CV_32F, TRY_CTX(nppiWarpPerspectiveBack_32f_C4R)>::call}
             }
         };
 

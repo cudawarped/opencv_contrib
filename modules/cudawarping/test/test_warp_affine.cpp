@@ -262,8 +262,9 @@ CUDA_TEST_P(WarpAffineNPP, Accuracy)
     if (inverse)
         flags |= cv::WARP_INVERSE_MAP;
 
+    cv::cuda::Stream stream;
     cv::cuda::GpuMat dst;
-    cv::cuda::warpAffine(loadMat(src), dst, M, src.size(), flags);
+    cv::cuda::warpAffine(loadMat(src), dst, M, src.size(), flags, 0, cv::Scalar(), stream);
 
     cv::Mat dst_gold;
     warpAffineGold(src, M, inverse, src.size(), dst_gold, interpolation, cv::BORDER_CONSTANT, cv::Scalar::all(0));
