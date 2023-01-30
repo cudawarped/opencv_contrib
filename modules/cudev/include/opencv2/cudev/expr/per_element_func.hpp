@@ -121,6 +121,13 @@ cvt_(const SrcPtr& src)
     return makeExpr(transformPtr(src, saturate_cast_func<typename PtrTraits<SrcPtr>::value_type, D>()));
 }
 
+//template <class SrcPtr>
+//__host__ Expr<UnaryTransformPtrSz<typename PtrTraits<SrcPtr>::ptr_type, saturate_cast_func<typename PtrTraits<SrcPtr>::value_type, float16_t> > >
+//cvtToFp16_(const SrcPtr& src)
+//{
+//    return makeExpr(transformPtr(src, saturate_cast_func<typename PtrTraits<SrcPtr>::value_type, float16_t>()));
+//}
+
 // lut
 
 template <class SrcPtr, class TablePtr>

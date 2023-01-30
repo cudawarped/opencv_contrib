@@ -101,8 +101,8 @@ public:
 
     static void doTest3(const SizeArray& size)
     {
-        if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
-            return;
+        //if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
+        //    return;
 
         const MatType gold = RandomMat(size);
         const std::vector<Range> ranges = RandomRange2D(size);
@@ -140,8 +140,8 @@ public:
 
     static void doTest4(const SizeArray& size)
     {
-        if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
-            return;
+        //if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
+        //    return;
 
         const MatType gold = RandomMat(size);
         const std::vector<Range> ranges = RandomRange2D(size);
@@ -169,8 +169,8 @@ public:
 
     static void doTest5(const SizeArray& size)
     {
-        if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
-            return;
+        //if (std::is_same<CnType, float16_t>::value) // GpuMat::convertTo is not implemented for CV_16F
+        //    return;
 
         const MatType gold = RandomMat(size);
         const std::vector<Range> ranges = RandomRange(size);

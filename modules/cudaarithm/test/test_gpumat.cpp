@@ -387,6 +387,82 @@ INSTANTIATE_TEST_CASE_P(CUDA, GpuMat_ConvertTo, testing::Combine(
     WHOLE_SUBMAT));
 
 ////////////////////////////////////////////////////////////////////////////////
+// ConvertToFP16
+
+PARAM_TEST_CASE(GpuMat_ConvertFP16, cv::cuda::DeviceInfo, cv::Size, MatDepth, UseRoi)
+{
+    cv::cuda::DeviceInfo devInfo;
+    cv::Size size;
+    int depth;
+    bool useRoi;
+
+    virtual void SetUp()
+    {
+        devInfo = GET_PARAM(0);
+        size = GET_PARAM(1);
+        depth = GET_PARAM(2); // actually type
+        useRoi = GET_PARAM(3);
+
+        cv::cuda::setDevice(devInfo.deviceID());
+    }
+};
+
+CUDA_TEST_P(GpuMat_ConvertFP16, WithOutScaling)
+{
+    cv::Mat src = randomMat(size, depth);
+    {
+        cv::cuda::GpuMat d_src = loadMat(src, useRoi);
+        cv::cuda::GpuMat d_tmp = createMat(size, CV_16FC3, useRoi);
+        cv::cuda::GpuMat d_dst = createMat(size, depth, useRoi);
+        d_src.convertTo(d_tmp, CV_16FC3);
+        d_tmp.convertTo(d_dst, depth);
+
+        cv::Mat dst_gold, tmp;
+        src.convertTo(tmp, CV_16FC3);
+        tmp.convertTo(dst_gold, depth);
+
+        if (depth == CV_16FC3) {
+            Mat h_dst; d_dst.download(h_dst);
+            const double norm = cv::norm(dst_gold, h_dst, NORM_INF);
+            ASSERT_EQ(norm, 0);
+        }
+        else {
+            EXPECT_MAT_NEAR(dst_gold, d_dst, CV_MAT_DEPTH(depth) < CV_32F ? 1.0 : 5e-1);
+        }
+    }
+}
+
+CUDA_TEST_P(GpuMat_ConvertFP16, WithScaling)
+{
+    cv::Mat src = randomMat(size, depth);
+    const int dst_depth = depth == CV_16FC3 ? CV_32FC3 : depth;
+    double a = randomDouble(0.0, 1.0);
+    double b = randomDouble(-10.0, 10.0);
+    {
+        cv::cuda::GpuMat d_src = loadMat(src, useRoi);
+        cv::cuda::GpuMat d_tmp = createMat(size, CV_16FC3, useRoi);
+        cv::cuda::GpuMat d_dst = createMat(size, dst_depth, useRoi);
+        d_src.convertTo(d_tmp, CV_16FC3, a, b);
+        d_tmp.convertTo(d_dst, dst_depth);
+
+        cv::Mat dst_gold, tmp;
+        src.convertTo(tmp, CV_16FC3, a, b);
+        tmp.convertTo(dst_gold, dst_depth);
+
+        //Mat h_dst; d_dst.download(h_dst);
+        //ASSERT_TRUE(cvtest::norm(dst_gold, h_dst, NORM_INF) < (depth < CV_32F ? 1.0 : 5e-1));
+        EXPECT_MAT_NEAR(dst_gold, d_dst, CV_MAT_DEPTH(depth) < CV_32F ? 1.0 : 5e-1);
+    }
+}
+#define ALL_DEPTH_WTH_FP16 testing::Values(MatDepth(CV_16FC3), MatDepth(CV_8UC3), MatDepth(CV_8SC3), MatDepth(CV_16UC3), MatDepth(CV_16SC3), MatDepth(CV_32SC3), MatDepth(CV_32FC3), MatDepth(CV_64FC3))
+
+INSTANTIATE_TEST_CASE_P(CUDA, GpuMat_ConvertFP16, testing::Combine(
+    ALL_DEVICES,
+    DIFFERENT_SIZES,
+    ALL_DEPTH_WTH_FP16,
+    WHOLE_SUBMAT));
+
+////////////////////////////////////////////////////////////////////////////////
 // locateROI
 
 PARAM_TEST_CASE(GpuMat_LocateROI, cv::cuda::DeviceInfo, cv::Size, MatDepth, UseRoi)

@@ -272,8 +272,105 @@ template <> __device__ __forceinline__ uint saturate_cast<uint>(double v)
     return saturate_cast<uint>((float) v);
 #endif
 }
+//template <> __device__ __forceinline__ float16_t saturate_cast<float>(float16_t v)
+//{
+//    __half h(v);
+//    return *(reinterpret_cast<float16_t*>(&h));
+//}
 
 template <typename T, typename D> __device__ __forceinline__ D cast_fp16(T v);
+
+template <typename T> __device__ __forceinline__ short cast_to_fp16(T v)
+{
+    __half h(v);
+    return *(reinterpret_cast<short*>(&h));
+    //
+    //return *(short*)&h;
+}
+
+template <typename T> __device__ __forceinline__ T cast_from_fp16(short v)
+{
+    //__half h(v);
+    //return *(reinterpret_cast<short*>(&h));
+
+    return T(*(__half*)&v);
+    //
+    //return *(short*)&h;
+}
+
+template <> __device__ __forceinline__ uchar cast_from_fp16<uchar>(short v)
+{
+    int res = 0;
+    asm("cvt.rni.sat.u8.f16 %0, %1;" : "=r"(res) : "h"(v));
+    return res;
+}
+
+template <> __device__ __forceinline__ schar cast_from_fp16<schar>(short v)
+{
+    int res = 0;
+    asm("cvt.rni.sat.s8.f16 %0, %1;" : "=r"(res) : "h"(v));
+    return res;
+}
+
+template <> __device__ __forceinline__ ushort cast_from_fp16<ushort>(short v)
+{
+    short res = 0;
+    asm("cvt.rni.sat.u16.f16 %0, %1;" : "=h"(res) : "h"(v));
+    return res;
+}
+
+template <> __device__ __forceinline__ short cast_from_fp16<short>(short v)
+{
+    short res = 0;
+    asm("cvt.rni.sat.s16.f16 %0, %1;" : "=h"(res) : "h"(v));
+    return res;
+}
+
+//template <> __device__ __forceinline__ uchar cast_from_fp16<short>(short v)
+//{
+//    uint res = 0;
+//    asm("cvt.rni.sat.s16.f16 %0, %1;" : "=r"(res) : "h"(v));
+//    return res;
+//}
+
+//template <> __device__ __forceinline__ uchar saturate_cast<uchar>(short v)
+//{
+//    uint res = 0;
+//    asm("cvt.sat.u8.s16 %0, %1;" : "=r"(res) : "h"(v));
+//    return res;
+//}
+
+//template <> __device__ __forceinline__ uchar saturate_cast<uchar>(int v)
+//{
+//    uint res = 0;
+//    asm("cvt.sat.u8.s32 %0, %1;" : "=r"(res) : "r"(v));
+//    return res;
+//}
+//template <> __device__ __forceinline__ uchar saturate_cast<uchar>(uint v)
+//{
+//    uint res = 0;
+//    asm("cvt.sat.u8.u32 %0, %1;" : "=r"(res) : "r"(v));
+//    return res;
+//}
+
+//template __device__ __forceinline__ short cast_fp16<uchar, short>(uchar v);
+
+
+//template <> __device__ __forceinline__ short cast_fp16<uchar, short>(uchar v)
+//{
+//    __half h(v);
+//    return *(reinterpret_cast<short*>(&h));
+//    //
+//    //return *(short*)&h;
+//}
+//
+template <> __device__ __forceinline__ short cast_fp16<schar, short>(schar v)
+{
+    __half h(v);
+    return *(reinterpret_cast<short*>(&h));
+    //
+    //return *(short*)&h;
+}
 
 template <> __device__ __forceinline__ float cast_fp16<short, float>(short v)
 {

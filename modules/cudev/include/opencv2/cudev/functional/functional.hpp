@@ -669,25 +669,82 @@ template <typename T, typename D> struct saturate_cast_func : unary_function<T, 
 };
 
 // Convert Fp16 dummy
-template <typename T, typename D> struct saturate_cast_fp16_func;
+//template <typename T, typename D> struct saturate_cast_fp16_func  : unary_function<T, D> {
+//    __device__ __forceinline__ D operator ()(T v) const
+//    {
+//        // first cast to float and then call the below
+//        return cast_fp16<T, D>(v);
+//    }
+//
+//};
 
-// Convert Fp16 from Fp32
-template <> struct saturate_cast_fp16_func<float, short> : unary_function<float, short>
-{
-    __device__ __forceinline__ short operator ()(float v) const
-    {
-        return cast_fp16<float, short>(v);
-    }
+template <typename T> struct saturate_cast_to_fp16_func : unary_function<T, short> {
+    __device__ __forceinline__ short operator ()(T v) const { return cast_to_fp16<T>(v); }
 };
 
-// Convert Fp16 to Fp32
-template <> struct saturate_cast_fp16_func<short, float> : unary_function<short, float>
-{
-    __device__ __forceinline__ float operator ()(short v) const
-    {
-        return cast_fp16<short, float>(v);
-    }
+template <typename T> struct saturate_cast_from_fp16_func : unary_function<short, T> {
+    __device__ __forceinline__ T operator ()(short v) const { return cast_from_fp16<T>(v); }
 };
+
+template <typename T, typename D> struct saturate_cast_fp16_func : unary_function<T, D> {
+    __device__ __forceinline__ D operator ()(T v) const { return cast_from_fp16<D>(v); }
+};
+
+template <typename T> struct saturate_cast_fp16_func<T, short> : unary_function<T, short> {
+    __device__ __forceinline__ short operator ()(T v) const { return cast_to_fp16<T>(v); }
+};
+
+struct saturate_cast_fp16_to_short_func : unary_function<short, short> {
+    __device__ __forceinline__ short operator ()(short v) const { return cast_from_fp16<short>(v); }
+};
+
+
+
+//template <typename T> struct saturate_cast_fp16_func : unary_function<T, short> {
+//    __device__ __forceinline__ short operator ()(T v) const
+//    {
+//        // first cast to float and then call the below
+//        return cast_fp16<T, short>(v);
+//    }
+//
+//};
+
+//template <typename T> struct saturate_cast_fp16_func<uchar, short> : unary_function<uchar, short>
+//{
+//    __device__ __forceinline__ short operator ()(uchar v) const
+//    {
+//        // first cast to float and then call the below
+//        return cast_fp16<uchar, short>(v);
+//    }
+//};
+
+// Convert uint8 to Fp16
+//template <> struct saturate_cast_fp16_func<uchar, short> : unary_function<uchar, short>
+//{
+//    __device__ __forceinline__ short operator ()(uchar v) const
+//    {
+//        // first cast to float and then call the below
+//        return cast_fp16<uchar, short>(v);
+//    }
+//};
+//
+//// Convert Fp16 from Fp32
+//template <> struct saturate_cast_fp16_func<float, short> : unary_function<float, short>
+//{
+//    __device__ __forceinline__ short operator ()(float v) const
+//    {
+//        return cast_fp16<float, short>(v);
+//    }
+//};
+//
+//// Convert Fp16 to Fp32
+//template <> struct saturate_cast_fp16_func<short, float> : unary_function<short, float>
+//{
+//    __device__ __forceinline__ float operator ()(short v) const
+//    {
+//        return cast_fp16<short, float>(v);
+//    }
+//};
 
 // Threshold Functors
 
