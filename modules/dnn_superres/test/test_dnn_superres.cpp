@@ -28,6 +28,9 @@ void runSingleModel(std::string algorithm, int scale, std::string model_filename
 
     dnn_sr->readModel(pb_path);
 
+    dnn_sr->setPreferableBackend(dnn::DNN_BACKEND_CUDA);
+    dnn_sr->setPreferableTarget(dnn::DNN_TARGET_CUDA);
+
     dnn_sr->setModel(algorithm, scale);
 
     ASSERT_EQ(scale, dnn_sr->getScale());
@@ -42,6 +45,11 @@ void runSingleModel(std::string algorithm, int scale, std::string model_filename
     int new_rows = img.rows * scale;
     ASSERT_EQ(new_cols, result.cols);
     ASSERT_EQ(new_rows, result.rows);
+}
+
+TEST(CV_DnnSuperResSingleOutputTest, accuracy_edsr_4)
+{
+    runSingleModel("edsr", 4, "EDSR_x4.pb");
 }
 
 TEST(CV_DnnSuperResSingleOutputTest, accuracy_espcn_2)
