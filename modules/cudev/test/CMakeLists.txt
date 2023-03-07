@@ -15,6 +15,11 @@ if(OCV_DEPENDENCIES_FOUND)
 
   ocv_cuda_filter_options()
 
+  if(CMAKE_GENERATOR MATCHES "Visual Studio" AND "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_DEBUG} ${CUDA_NVCC_FLAGS}" MATCHES "Zi")
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -Xcompiler -FS)
+    message(WARNING "CUDA_NVCC_FLAGS= ${CUDA_NVCC_FLAGS}")
+  endif()
+
   if(CUDA_VERSION VERSION_LESS "11.0")
     ocv_update(OPENCV_CUDA_OPTIONS_opencv_test_cudev "-std=c++11")
   else()
