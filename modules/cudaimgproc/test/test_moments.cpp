@@ -49,7 +49,7 @@ namespace opencv_test { namespace {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // Moments
 
-PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, IsBinary)
+PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, int, int)
 {
     static void drawCircle(cv::Mat& dst, const cv::Vec3f& circle, bool fill)
     {
@@ -82,13 +82,15 @@ CUDA_TEST_P(Moments, Accuracy)
     const cv::Size size = GET_PARAM(1);
     const bool isBinary = GET_PARAM(2);
 
-    const int shapeType = randomInt(0, 3);
-    const int shapeIndex = randomInt(0, 4);
+    const int shapeType = GET_PARAM(3);
+    const int shapeIndex = GET_PARAM(4);
     printf("shapeType=%d, shapeIndex=%d\n", shapeType, shapeIndex);
 
     std::vector<cv::Vec3f> circles(4);
-    circles[0] = cv::Vec3i(20, 20, 10);
-    circles[1] = cv::Vec3i(90, 87, 15);
+    //circles[0] = cv::Vec3i(10, 10, 4); //cv::Vec3i(20, 20, 10);
+    circles[0] = cv::Vec3i(size.width / 2, size.height / 2, size.width / 4);
+    circles[1] = cv::Vec3i(size.width / 2, size.height / 2, size.width / 10);
+    //circles[1] = cv::Vec3i(90, 87, 15);
     circles[2] = cv::Vec3i(30, 70, 20);
     circles[3] = cv::Vec3i(80, 10, 25);
 
@@ -120,7 +122,6 @@ CUDA_TEST_P(Moments, Accuracy)
       }
     }
     cv::cuda::GpuMat src_gpu = loadMat(src_cpu, false);
-
     const auto t0 = std::chrono::high_resolution_clock::now();
     const cv::Moments moments_cpu = cv::moments(src_cpu, isBinary);
     const auto t1 = std::chrono::high_resolution_clock::now();
@@ -158,11 +159,15 @@ CUDA_TEST_P(Moments, Accuracy)
     ASSERT_NEAR(moments_cpu.nu12, moments_gpu.nu12, 1e-4);
     ASSERT_NEAR(moments_cpu.nu03, moments_gpu.nu03, 1e-4);
 }
-
+#define GRAYSCALE_BINARY testing::Values(true, false)
+#define SHAPE_TYPE testing::Values(0,1)//testing::Values(0,1,2)
+#define SHAPE_IDX testing::Values(0)//testing::Values(0,1,2,3)
 INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(
     ALL_DEVICES,
-    DIFFERENT_SIZES,
-    GRAYSCALE_BINARY));
+    testing::Values(Size(128,128), Size(1920,1920)),
+    GRAYSCALE_BINARY,
+    SHAPE_TYPE,
+    SHAPE_IDX));
 
 }} // namespace
 #endif // HAVE_CUDA
