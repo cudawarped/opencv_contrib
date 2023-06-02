@@ -125,15 +125,70 @@ __global__ void ComputeSpatialMomentsSharedFullReduction(const cuda::PtrStepSzb 
     if (res) {
         smem[0][threadIdx.y] = res;
         smem[1][threadIdx.y] = warpButterflyReduce(x * val);
-        smem[2][threadIdx.y] = warpButterflyReduce(y * val);
+        smem[2][threadIdx.y] = y * res;
         smem[3][threadIdx.y] = warpButterflyReduce(x2 * val);
         smem[4][threadIdx.y] = warpButterflyReduce(x * y * val);
-        smem[5][threadIdx.y] = warpButterflyReduce(y2 * val);
+        smem[5][threadIdx.y] = y2 * res;
         smem[6][threadIdx.y] = warpButterflyReduce(x3 * val);
         smem[7][threadIdx.y] = warpButterflyReduce(x2 * y * val);
         smem[8][threadIdx.y] = warpButterflyReduce(x * y2 * val);
-        smem[9][threadIdx.y] = warpButterflyReduce(y3 * val);
+        smem[9][threadIdx.y] = y3 * res;
     }
+    __syncthreads();
+
+    if (threadIdx.x < blockSizeY && threadIdx.y < 10)
+        smem[threadIdx.y][0] = halfWarpButterflyReduce(smem[threadIdx.y][threadIdx.x]);
+    __syncthreads();
+
+    if (threadIdx.y == 0 && threadIdx.x < 10)
+        atomicAdd(&moments[threadIdx.x], smem[threadIdx.x][0]);
+}
+
+
+template <typename T>
+__global__ void ComputeSpatialMomentsSharedFullReductionCoaleced(const cuda::PtrStepSzb img, bool binary, T* moments) {
+    const unsigned int x = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    __shared__ T smem[10][32];
+
+    if (threadIdx.x < 10)
+        smem[threadIdx.x][threadIdx.y] = 0;
+    __syncthreads();
+
+    uchar val[4] = { 0 };
+    if (y < img.rows && x < img.cols) {
+        const unsigned int img_index = y * img.step + x;
+        const unsigned int data = *((const unsigned int*)(&(img.data[img_index])));
+        #pragma unroll 4
+        for (int i = 0; i < 4; i++) {
+            const uchar el = ((data >> i * 8) & 0xFFU);
+            val[i] = (!binary || el == 0) ? el : 1;
+        }
+    }
+
+    const unsigned long y2 = y * y, y3 = y2 * y;
+    #pragma unroll 4
+    for (int i = 0; i < 4; i++) {
+        const int iX = x + i;
+        const unsigned long x2 = iX * iX, x3 = x2 * iX;
+        T res = warpButterflyReduce(static_cast<T>(val[i]));
+        if (res) {
+            smem[0][threadIdx.y] += res;
+            smem[1][threadIdx.y] += warpButterflyReduce(iX * static_cast<T>(val[i]));
+            smem[3][threadIdx.y] += warpButterflyReduce(x2 * static_cast<T>(val[i]));
+            smem[4][threadIdx.y] += warpButterflyReduce(iX * y * static_cast<T>(val[i]));
+            smem[6][threadIdx.y] += warpButterflyReduce(x3 * static_cast<T>(val[i]));
+            smem[7][threadIdx.y] += warpButterflyReduce(x2 * y * static_cast<T>(val[i]));
+            smem[8][threadIdx.y] += warpButterflyReduce(iX * y2 * static_cast<T>(val[i]));
+        }
+    }
+
+    if (smem[0][threadIdx.y]) {
+        smem[2][threadIdx.y] = y * smem[0][threadIdx.y];
+        smem[5][threadIdx.y] = y2 * smem[0][threadIdx.y];
+        smem[9][threadIdx.y] = y3 * smem[0][threadIdx.y];
+    }
+
     __syncthreads();
 
     if (threadIdx.x < blockSizeY && threadIdx.y < 10)
@@ -166,14 +221,14 @@ __global__ void ComputeSpatialMomentsSharedPartialReduction(const cuda::PtrStepS
     const unsigned long y2 = y * y, y3 = y2 * y;
     if (m00) {
         m10 = warpButterflyReduce(x * val);
-        m01 = warpButterflyReduce(y * val);
+        m01 = y * m00;
         m20 = warpButterflyReduce(x2 * val);
         m11 = warpButterflyReduce(x * y * val);
-        m02 = warpButterflyReduce(y2 * val);
+        m02 = y2 * m00;
         m30 = warpButterflyReduce(x3 * val);
         m21 = warpButterflyReduce(x2 * y * val);
         m12 = warpButterflyReduce(x * y2 * val);
-        m03 = warpButterflyReduce(y3 * val);
+        m03 = y3 * m00;
     }
 
     if (threadIdx.x == 0) {
@@ -189,6 +244,7 @@ __global__ void ComputeSpatialMomentsSharedPartialReduction(const cuda::PtrStepS
         atomicAdd(&smem[9], m03);
     }
     __syncthreads();
+
 
     if (threadIdx.y == 0 && threadIdx.x < 10)
         atomicAdd(&moments[threadIdx.x], smem[threadIdx.x]);
@@ -234,8 +290,8 @@ void ComputeCenteralNormalizedMoments(cv::Moments& moments_cpu) {
 }
 
 void Benchmark(const int idx, const cv::cuda::GpuMat& img, bool binary) {
-    const dim3 blockSize(blockSizeX, blockSizeY, 1);
-    const dim3 gridSize((img.cols + blockSize.x - 1) / blockSize.x, (img.rows + blockSize.y - 1) / blockSize.y, 1);
+    dim3 blockSize(blockSizeX, blockSizeY, 1);
+    dim3 gridSize((img.cols + blockSize.x - 1) / blockSize.x, (img.rows + blockSize.y - 1) / blockSize.y, 1);
     cuda::Stream stream;
     cuda::Event start, end;
 
@@ -306,6 +362,30 @@ void Benchmark(const int idx, const cv::cuda::GpuMat& img, bool binary) {
             momentsGpu = GpuMat(1, momentsSize, CV_32F, cv::Scalar(0));
             start.record(stream);
             ComputeSpatialMomentsSharedFullReduction << <gridSize, blockSize, 0, cuda::StreamAccessor::getStream(stream) >> > (img, binary, momentsGpu.ptr<float>(0));
+            end.record(stream);
+            momentsGpu.convertTo(momentsGpu64F, CV_64F);
+            break;
+        }
+        case 6:
+        {
+            printf("\nShared memory with full reduction using double and coalecsed reads\n");
+            blockSize = dim3(blockSizeX, blockSizeY, 1);
+            gridSize = dim3(divUp(img.cols/4, blockSizeX), divUp(img.rows, blockSizeY));
+            momentsGpu = GpuMat(1, momentsSize, CV_64F, cv::Scalar(0));
+            start.record(stream);
+            ComputeSpatialMomentsSharedFullReductionCoaleced << <gridSize, blockSize, 0, cuda::StreamAccessor::getStream(stream) >> > (img, binary, momentsGpu.ptr<double>(0));
+            end.record(stream);
+            momentsGpu64F = momentsGpu;
+            break;
+        }
+        case 7:
+        {
+            printf("\nShared memory with full reduction using float and coalecsed reads\n");
+            blockSize = dim3(blockSizeX, blockSizeY, 1);
+            gridSize = dim3(divUp(img.cols / 4, blockSizeX), divUp(img.rows, blockSizeY));
+            momentsGpu = GpuMat(1, momentsSize, CV_32F, cv::Scalar(0));
+            start.record(stream);
+            ComputeSpatialMomentsSharedFullReductionCoaleced << <gridSize, blockSize, 0, cuda::StreamAccessor::getStream(stream) >> > (img, binary, momentsGpu.ptr<float>(0));
             end.record(stream);
             momentsGpu.convertTo(momentsGpu64F, CV_64F);
             break;
