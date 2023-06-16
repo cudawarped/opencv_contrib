@@ -146,6 +146,15 @@ results are returned in the structure cv::Moments.
  */
 CV_EXPORTS_W Moments moments( InputArray array, bool binaryImage = false );
 
+
+enum MomentType {
+    SPATIAL,
+    CENTRAL
+};
+
+CV_EXPORTS_W bool moments1(InputArray array, OutputArray moments, const bool binaryImage = false, const MomentType momentType = CENTRAL, const bool useDouble = false, Stream& stream = Stream::Null());
+
+
 /** @brief Exchanges the color channels of an image in-place.
 
 @param image Source image. Supports only CV_8UC4 type.
