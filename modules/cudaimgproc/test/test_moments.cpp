@@ -336,7 +336,7 @@ CUDA_TEST_P(Moments, Accuracy)
 
 #define SIZES testing::Values(Size(1920,1080))
 #define GRAYSCALE_BINARY testing::Values(true)
-#define SHAPE_PC testing::Values(0.9)
+#define SHAPE_PC testing::Values(0.1)
 #define MOMENTS_TYPE testing::Values(CV_64F, CV_32F)
 #define USE_ROI testing::Values(true)
 #define MIXED_PRECISION testing::Bool()
