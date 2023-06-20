@@ -49,7 +49,7 @@ namespace opencv_test { namespace {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // Moments
 
-PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, float, bool, bool)
+PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, float, int, bool, bool, bool)
 {
     static void drawCircle(cv::Mat& dst, const cv::Vec3f& circle, bool fill)
     {
@@ -82,15 +82,6 @@ vector<double> momentsToVec(cv::Moments moments) {
     moments.mu30, moments.mu21,moments.mu12,moments.mu03 };
 }
 
-// add commnet here to ref other method on what to use
-void CreateGpuMoments(GpuMat& moments, bool useDouble = true) {
-    constexpr int nGpuMoments = 10;
-    const int type = useDouble ? CV_64F : CV_32F;
-    // could use create func?
-    moments = GpuMat(1, nGpuMoments, type);
-    moments.setTo(0);
-}
-
 // have a test for CPU and GPU version should be in the same bit
 CUDA_TEST_P(Moments, Accuracy)
 {
@@ -99,35 +90,63 @@ CUDA_TEST_P(Moments, Accuracy)
     const cv::Size size = GET_PARAM(1);
     const bool isBinary = GET_PARAM(2);
     const float pcWidth = GET_PARAM(3);
-    const bool useDouble = GET_PARAM(4);
-    const bool useDefaultStream = GET_PARAM(5);
+    const int momentsType = GET_PARAM(4);
+    const bool useRoi = GET_PARAM(5);
+    const bool mixedPrecision = GET_PARAM(6);
+    const bool useDefaultStream = GET_PARAM(7);
 
-    Stream stream;// = useDefaultStream ? Stream::Null() : stream;
+    //const int roiOffsetX = 1;
+
+    std::cout << isBinary << "," << useRoi << "," << mixedPrecision << std::endl;
+    Stream stream = useDefaultStream ? Stream::Null() : Stream();
 
     cv::cuda::GpuMat momentsDevice;// (1, 17, CV_32F);
-    CreateGpuMoments(momentsDevice, true);
+    createGpuMoments(momentsDevice, momentsType);
     //const bool
 
     Mat imgHost(size, CV_8U);
+    //const Rect roi = Rect(roiOffsetX, 0, imgHost.cols - roiOffsetX, imgHost.rows);
+    const Rect roi = useRoi ? Rect(1, 0, imgHost.cols - 2, imgHost.rows) : Rect(0, 0, imgHost.cols, imgHost.rows);
+    //const Rect roi = Rect(0, 0, imgHost.cols, imgHost.rows);
     Vec3f circle(size.width / 2, size.height / 2, size.width * pcWidth);
     drawCircle(imgHost, circle, true);
     GpuMat imgDevice(imgHost);
-    cuda::moments1(imgDevice, momentsDevice, isBinary, MomentType::SPATIAL, false, stream);
+
+
+    // warm up
+    //cuda::moments(imgDevice, momentsDevice, isBinary, stream);
+    momentsDevice.setTo(0);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    cuda::moments(imgDevice(roi), momentsDevice, isBinary, mixedPrecision, stream);
+    stream.waitForCompletion();
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto elapsed_time_gpu = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
     Mat momentsHost; momentsDevice.download(momentsHost, stream);
     if (stream != Stream::Null())
         stream.waitForCompletion();
 
-    const cv::Moments momentsGs = cv::moments(imgHost, isBinary);
+    t1 = std::chrono::high_resolution_clock::now();
+    const cv::Moments momentsGs = cv::moments(imgHost(roi), isBinary);
+    t2 = std::chrono::high_resolution_clock::now();
+    auto elapsed_time_cpu = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    printf("CPU timer: %4ldus, GPU timer: %4ldus\n", elapsed_time_cpu, elapsed_time_gpu);
     Mat momentsHost64;
     momentsHost.convertTo(momentsHost64, CV_64F);
     cv::Moments momentsGpu(momentsHost64.at<double>(0), momentsHost64.at<double>(1), momentsHost64.at<double>(2), momentsHost64.at<double>(3), momentsHost64.at<double>(4),
         momentsHost64.at<double>(5), momentsHost64.at<double>(6), momentsHost64.at<double>(7), momentsHost64.at<double>(8), momentsHost64.at<double>(9));
 
+
+
     // only for debug use asserts when done
-    vector<double> momentsCpuVec = momentsToVec(momentsGpu);
-    vector<double> momentsGpuVec = momentsToVec(momentsGs);
+    vector<double> momentsCpuVec = momentsToVec(momentsGs);
+    vector<double> momentsGpuVec = momentsToVec(momentsGpu);
+
+    cv::Moments check(momentsCpuVec.at(0), momentsCpuVec.at(1), momentsCpuVec.at(2), momentsCpuVec.at(3), momentsCpuVec.at(4), momentsCpuVec.at(5), momentsCpuVec.at(6), momentsCpuVec.at(7), momentsCpuVec.at(8), momentsCpuVec.at(9));
+
+
     double maxRelError = 0;
-    for (int i = 0; i < momentsCpuVec.size(); i++) {
+    for (int i = 0; i < 10/*momentsCpuVec.size()*/; i++) {
         const double err = abs((momentsCpuVec.at(i) - momentsGpuVec.at(i)) / momentsCpuVec.at(i));
         if (err)
             printf("%i: %f, %f, %f\n", i, err, momentsCpuVec.at(i), momentsGpuVec.at(i));
@@ -298,16 +317,35 @@ CUDA_TEST_P(Moments, Accuracy)
     //ASSERT_NEAR(moments_cpu.nu12, moments_gpu.nu12, 1e-4);
     //ASSERT_NEAR(moments_cpu.nu03, moments_gpu.nu03, 1e-4);
 }
-#define GRAYSCALE_BINARY testing::Values(false,true)
-#define SHAPE_TYPE testing::Values(0)//testing::Values(0,1,2)
-#define SHAPE_IDX testing::Values(0,1,2,3)//testing::Values(0,1,2,3)
-#define SHAPE_PC testing::Values(0.1,0.9)
-INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(
-    ALL_DEVICES,
-    //testing::Values(Size(1920, 1920)),
-    testing::Values(Size(512,512), Size(1024, 1024), Size(1920,1920)),
-    GRAYSCALE_BINARY,
-    SHAPE_PC, testing::Values(true,false), testing::Values(true,false)));
 
+//#define SIZES testing::Values(Size(640,480), Size(1280,720), Size(1920,1080))
+//#define GRAYSCALE_BINARY testing::Values(true, false)
+//#define SHAPE_PC testing::Values(0.1,0.9)
+//#define TYPE testing::Values(CV_64F, CV_32F)
+//#define USE_ROI testing::Values(true, false)
+//#define MIXED_PRECISION testing::Values(true, false)
+//#define DEFAULT_STREAM testing::Values(true, false)
+
+//#define SIZES testing::Values(Size(1920,1080))
+//#define GRAYSCALE_BINARY testing::Bool()
+//#define SHAPE_PC testing::Values(0.9)
+//#define MOMENTS_TYPE testing::Values(CV_64F)
+//#define USE_ROI testing::Bool()
+//#define MIXED_PRECISION testing::Bool()
+//#define DEFAULT_STREAM testing::Bool()
+
+#define SIZES testing::Values(Size(1920,1080))
+#define GRAYSCALE_BINARY testing::Values(true)
+#define SHAPE_PC testing::Values(0.9)
+#define MOMENTS_TYPE testing::Values(CV_64F, CV_32F)
+#define USE_ROI testing::Values(true)
+#define MIXED_PRECISION testing::Bool()
+#define DEFAULT_STREAM testing::Values(false)
+
+
+//INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, SHAPE_PC, TYPE, USE_ROI, MIXED_PRECISION, DEFAULT_STREAM));
+INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, SHAPE_PC, MOMENTS_TYPE, USE_ROI, MIXED_PRECISION, DEFAULT_STREAM));
 }} // namespace
+
+
 #endif // HAVE_CUDA

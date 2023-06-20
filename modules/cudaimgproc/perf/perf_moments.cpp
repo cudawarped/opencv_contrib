@@ -32,7 +32,7 @@ namespace opencv_test {
                 // could have createGpuMoments() method with a type
                 GpuMat moments(1, 10, CV_32F);
                 GpuMat imgDevice(imgHost);
-                TEST_CYCLE() cv::cuda::moments1(imgDevice, moments, isBinary, MomentType::SPATIAL, false);
+                TEST_CYCLE() cv::cuda::moments(imgDevice, moments, isBinary);
                 CUDA_SANITY_CHECK(moments);
             }
             else {

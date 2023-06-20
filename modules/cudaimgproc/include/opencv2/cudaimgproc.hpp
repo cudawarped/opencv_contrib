@@ -144,15 +144,16 @@ results are returned in the structure cv::Moments.
 @param binaryImage If it is true, all non-zero image pixels are treated as 1's.
 @returns moments.
  */
-CV_EXPORTS_W Moments moments( InputArray array, bool binaryImage = false );
+//CV_EXPORTS_W Moments moments( InputArray array, bool binaryImage = false );
 
+CV_EXPORTS_W void createGpuMoments(GpuMat& moments, const int depth = CV_64F);
 
-enum MomentType {
-    SPATIAL,
-    CENTRAL
-};
+//enum MomentType {
+//    SPATIAL,
+//    CENTRAL
+//};
 
-CV_EXPORTS_W bool moments1(InputArray array, OutputArray moments, const bool binaryImage = false, const MomentType momentType = CENTRAL, const bool useDouble = false, Stream& stream = Stream::Null());
+CV_EXPORTS_W bool moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, const Stream& stream = Stream::Null());
 
 
 /** @brief Exchanges the color channels of an image in-place.
