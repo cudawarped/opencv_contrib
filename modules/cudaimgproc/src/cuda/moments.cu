@@ -327,6 +327,7 @@ __global__ void ComputeSpatialMomentsSharedFullReductionS3(const PtrStepSzb img,
 }
 
 
+constexpr int nMoments = 10;
 
 template <typename T>
 __device__ __forceinline__ T butterflyWarpReduction(T value) {
@@ -343,20 +344,21 @@ __device__ __forceinline__ T butterflyHalfWarpReduction(T value) {
 }
 
 template<typename T, typename M>
-__device__ void rowReductions(const PtrStepSzb img, const bool binary, const unsigned int y, float& sumReduction, M reductions[3], T smem[][10]) {
+__device__ void rowReductions(const PtrStepSzb img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, T& r3, T smem[][nMoments]) {
     for (int x = threadIdx.x; x < img.cols; x += blockDim.x) {
         const unsigned int x2 = x * x;
-        const M x3 = static_cast<M>(x2) * x;
+        const T x3 = static_cast<T>(x2) * x;
         const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-        sumReduction += val;
-        reductions[0] += static_cast<M>(val) * x;
-        reductions[1] += static_cast<M>(val) * x2;
-        reductions[2] += static_cast<M>(val) * x3;
+        r0 += val;
+        r1 += static_cast<M>(val) * x;
+        r2 += static_cast<M>(val) * x2;
+        //r3 += static_cast<M>(val) * x3;
+        r3 += static_cast<T>(val) * x3;
     }
 }
 
 template<typename T, bool fourByteAligned, typename M>
-__device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, const unsigned int y, float& sumReduction, M reductions[3], const int offsetX, T smem[][10]) {
+__device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, T& r3, const int offsetX, T smem[][nMoments]) {
     const int alignedOffset = fourByteAligned ? 0 : 4 - offsetX;
     // load uncoalesced head
     if (!fourByteAligned && threadIdx.x == 0) {
@@ -364,10 +366,10 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             const unsigned int x2 = x * x;
             const M x3 = static_cast<M>(x2) * x;
             const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-            sumReduction += val;
-            reductions[0] += static_cast<M>(val) * x;
-            reductions[1] += static_cast<M>(val) * x2;
-            reductions[2] += static_cast<M>(val) * x3;
+            r0 += val;
+            r1 += static_cast<M>(val) * x;
+            r2 += static_cast<M>(val) * x2;
+            r3 += static_cast<M>(val) * x3;
         }
     }
 
@@ -383,10 +385,10 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             const M x3 = static_cast<M>(x2) * iX;
             const uchar ucharVal = ((data >> i * 8) & 0xFFU);
             const float val = (!binary || ucharVal == 0) ? ucharVal : 1;
-            sumReduction += val;
-            reductions[0] += static_cast<M>(val) * iX;
-            reductions[1] += static_cast<M>(val) * x2;
-            reductions[2] += static_cast<M>(val) * x3;
+            r0 += val;
+            r1 += static_cast<M>(val) * iX;
+            r2 += static_cast<M>(val) * x2;
+            r3 += static_cast<M>(val) * x3;
         }
     }
 
@@ -397,17 +399,17 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             const unsigned int x2 = x * x;
             const M x3 = static_cast<M>(x2) * x;
             const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-            sumReduction += val;
-            reductions[0] += static_cast<M>(val) * x;
-            reductions[1] += static_cast<M>(val) * x2;
-            reductions[2] += static_cast<M>(val) * x3;
+            r0 += val;
+            r1 += static_cast<M>(val) * x;
+            r2 += static_cast<M>(val) * x2;
+            r3 += static_cast<M>(val) * x3;
         }
     }
 }
 
 template <typename T, bool coalesced = false, bool fourByteAligned = false, typename M = T>
 __global__ void spatialMoments(const PtrStepSzb img, const bool binary, T* moments, const int offsetX = 0) {
-    constexpr int nMoments = 10;
+    //constexpr int nMoments = 10;
     const unsigned int y = blockIdx.x * blockDim.y + threadIdx.y;
     __shared__ T smem[blockSizeY][nMoments];
 
@@ -415,26 +417,29 @@ __global__ void spatialMoments(const PtrStepSzb img, const bool binary, T* momen
         smem[threadIdx.x][threadIdx.y] = 0;
     __syncthreads();
 
-    float sumReduction = 0;
-    M reductions[3] = { 0 };
+    float r0 = 0;
+    M r1 = 0;
+    M r2 = 0;
+    T r3 = 0;
+    //M reductions[3] = { 0 };
     if (y < img.rows) {
         if (coalesced)
-            rowReductionsCoalesced<T, fourByteAligned, M>(img, binary, y, sumReduction, reductions, offsetX, smem);
+            rowReductionsCoalesced<T, fourByteAligned, M>(img, binary, y, r0, r1, r2, r3, offsetX, smem);
         else
-            rowReductions<T, M>(img, binary, y, sumReduction, reductions, smem);
+            rowReductions<T, M>(img, binary, y, r0, r1, r2, r3, smem);
     }
 
     const unsigned long y2 = y * y;
     const T y3 = static_cast<T>(y2) * y;
-    float res = butterflyWarpReduction<T>(sumReduction);
+    float res = butterflyWarpReduction<T>(r0);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
         smem[threadIdx.y][2] = y * static_cast<T>(res); //1st
         smem[threadIdx.y][5] = y2 * static_cast<T>(res); //2nd
         smem[threadIdx.y][9] = y3 * static_cast<T>(res); //3rd
-        smem[threadIdx.y][1] = butterflyWarpReduction<T>(reductions[0]); //1st
-        smem[threadIdx.y][3] = butterflyWarpReduction<T>(reductions[1]); //2nd
-        smem[threadIdx.y][6] = butterflyWarpReduction<T>(reductions[2]); //3rd
+        smem[threadIdx.y][1] = butterflyWarpReduction<T>(r1); //1st
+        smem[threadIdx.y][3] = butterflyWarpReduction<T>(r2); //2nd
+        smem[threadIdx.y][6] = butterflyWarpReduction<T>(r3); //3rd
         smem[threadIdx.y][4] = smem[threadIdx.y][1] * y; //2nd
         smem[threadIdx.y][7] = smem[threadIdx.y][3] * y; //3rd
         smem[threadIdx.y][8] = smem[threadIdx.y][1] * y2; //3rd
