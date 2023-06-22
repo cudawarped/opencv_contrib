@@ -153,7 +153,7 @@ CV_EXPORTS_W void createGpuMoments(GpuMat& moments, const int depth = CV_64F);
 //    CENTRAL
 //};
 
-CV_EXPORTS_W bool moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, const Stream& stream = Stream::Null());
+CV_EXPORTS_W bool moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, Stream& stream = Stream::Null());
 
 
 /** @brief Exchanges the color channels of an image in-place.
