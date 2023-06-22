@@ -49,7 +49,7 @@ namespace opencv_test { namespace {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // Moments
 
-PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, float, int, bool, bool, bool)
+PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, float, int, int, bool, bool, bool)
 {
     static void drawCircle(cv::Mat& dst, const cv::Vec3f& circle, bool fill)
     {
@@ -91,9 +91,10 @@ CUDA_TEST_P(Moments, Accuracy)
     const bool isBinary = GET_PARAM(2);
     const float pcWidth = GET_PARAM(3);
     const int momentsType = GET_PARAM(4);
-    const bool useRoi = GET_PARAM(5);
-    const bool mixedPrecision = GET_PARAM(6);
-    const bool useDefaultStream = GET_PARAM(7);
+    const int imgType = GET_PARAM(5);
+    const bool useRoi = GET_PARAM(6);
+    const bool mixedPrecision = GET_PARAM(7);
+    const bool useDefaultStream = GET_PARAM(8);
 
     //const int roiOffsetX = 1;
 
@@ -104,7 +105,7 @@ CUDA_TEST_P(Moments, Accuracy)
     createGpuMoments(momentsDevice, momentsType);
     //const bool
 
-    Mat imgHost(size, CV_8U);
+    Mat imgHost(size, imgType);
     //const Rect roi = Rect(roiOffsetX, 0, imgHost.cols - roiOffsetX, imgHost.rows);
     const Rect roi = useRoi ? Rect(1, 0, imgHost.cols - 2, imgHost.rows) : Rect(0, 0, imgHost.cols, imgHost.rows);
     //const Rect roi = Rect(0, 0, imgHost.cols, imgHost.rows);
@@ -334,17 +335,19 @@ CUDA_TEST_P(Moments, Accuracy)
 //#define MIXED_PRECISION testing::Bool()
 //#define DEFAULT_STREAM testing::Bool()
 
-#define SIZES testing::Values(Size(1920,1080))
-#define GRAYSCALE_BINARY testing::Values(true)
+//define SIZES testing::Values(Size(1920,1080))
+#define SIZES testing::Values(Size(640,480))
+#define GRAYSCALE_BINARY testing::Values(false)
 #define SHAPE_PC testing::Values(0.1)
-#define MOMENTS_TYPE testing::Values(CV_64F, CV_32F)
+#define MOMENTS_TYPE testing::Values(CV_32F, CV_64F)
+#define IMG_TYPE testing::Values(CV_8U, CV_32F)
 #define USE_ROI testing::Values(true)
 #define MIXED_PRECISION testing::Bool()
 #define DEFAULT_STREAM testing::Values(false)
 
 
 //INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, SHAPE_PC, TYPE, USE_ROI, MIXED_PRECISION, DEFAULT_STREAM));
-INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, SHAPE_PC, MOMENTS_TYPE, USE_ROI, MIXED_PRECISION, DEFAULT_STREAM));
+INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, SHAPE_PC, MOMENTS_TYPE, IMG_TYPE, USE_ROI, MIXED_PRECISION, DEFAULT_STREAM));
 }} // namespace
 
 

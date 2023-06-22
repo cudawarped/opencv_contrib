@@ -354,14 +354,14 @@ __device__ void updateSums(const float val, const unsigned int x, float& r0, M& 
     r3 += static_cast<M>(val) * x3;
 }
 
-template<typename T, typename M>
-__device__ void rowReductions(const PtrStepSzb img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, M& r3, T smem[][nMoments]) {
+template<typename TSrc, typename TMoments, typename M>
+__device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, M& r3, TMoments smem[][nMoments]) {
     for (int x = threadIdx.x; x < img.cols; x += blockDim.x) {
         //const unsigned int x2 = x * x;
         //const T x3 = static_cast<T>(x2) * x;
         const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
 
-        updateSums<T,M>(val, x, r0, r1, r2, r3);
+        updateSums<TMoments,M>(val, x, r0, r1, r2, r3);
         //r0 += val;
         //r1 += static_cast<M>(val) * x;
         //r2 += static_cast<M>(val) * x2;
@@ -370,8 +370,8 @@ __device__ void rowReductions(const PtrStepSzb img, const bool binary, const uns
     }
 }
 
-template<typename T, bool fourByteAligned, typename M>
-__device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, M& r3, const int offsetX, T smem[][nMoments]) {
+template<typename TSrc, typename TMoments, bool fourByteAligned, typename M>
+__device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, M& r1, M& r2, M& r3, const int offsetX, TMoments smem[][nMoments]) {
     const int alignedOffset = fourByteAligned ? 0 : 4 - offsetX;
     // load uncoalesced head
     if (!fourByteAligned && threadIdx.x == 0) {
@@ -380,7 +380,7 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             //const M x3 = static_cast<M>(x2) * x;
             const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
 
-            updateSums<T, M>(val, x, r0, r1, r2, r3);
+            updateSums<TMoments, M>(val, x, r0, r1, r2, r3);
             //r0 += val;
             //r1 += static_cast<M>(val) * x;
             //r2 += static_cast<M>(val) * x2;
@@ -401,7 +401,7 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             const uchar ucharVal = ((data >> i * 8) & 0xFFU);
             const float val = (!binary || ucharVal == 0) ? ucharVal : 1;
 
-            updateSums<T, M>(val, iX, r0, r1, r2, r3);
+            updateSums<TMoments, M>(val, iX, r0, r1, r2, r3);
             //r0 += val;
             //r1 += static_cast<M>(val) * iX;
             //r2 += static_cast<M>(val) * x2;
@@ -416,7 +416,7 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
             //const unsigned int x2 = x * x;
             //const M x3 = static_cast<M>(x2) * x;
             const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-            updateSums<T, M>(val, x, r0, r1, r2, r3);
+            updateSums<TMoments, M>(val, x, r0, r1, r2, r3);
             //r0 += val;
             //r1 += static_cast<M>(val) * x;
             //r2 += static_cast<M>(val) * x2;
@@ -425,11 +425,11 @@ __device__ void rowReductionsCoalesced(const PtrStepSzb img, const bool binary, 
     }
 }
 
-template <typename T, bool coalesced = false, bool fourByteAligned = false, typename M = T>
-__global__ void spatialMoments(const PtrStepSzb img, const bool binary, T* moments, const int offsetX = 0) {
+template <typename TSrc, typename TMoments, bool coalesced = false, bool fourByteAligned = false, typename M = TMoments>
+__global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMoments* moments, const int offsetX = 0) {
     //constexpr int nMoments = 10;
     const unsigned int y = blockIdx.x * blockDim.y + threadIdx.y;
-    __shared__ T smem[blockSizeY][nMoments];
+    __shared__ TMoments smem[blockSizeY][nMoments];
 
     if (threadIdx.y < nMoments && threadIdx.x < blockSizeY)
         smem[threadIdx.x][threadIdx.y] = 0;
@@ -442,25 +442,25 @@ __global__ void spatialMoments(const PtrStepSzb img, const bool binary, T* momen
     //M reductions[3] = { 0 };
     if (y < img.rows) {
         if (coalesced)
-            rowReductionsCoalesced<T, fourByteAligned, M>(img, binary, y, r0, r1, r2, r3, offsetX, smem);
+            rowReductionsCoalesced<TSrc, TMoments, fourByteAligned, M>(img, binary, y, r0, r1, r2, r3, offsetX, smem);
         else
-            rowReductions<T, M>(img, binary, y, r0, r1, r2, r3, smem);
+            rowReductions<TSrc, TMoments, M>(img, binary, y, r0, r1, r2, r3, smem);
     }
 
     const unsigned long y2 = y * y;
-    const T y3 = static_cast<T>(y2) * y;
-    const float res = butterflyWarpReduction<T>(r0);
+    const TMoments y3 = static_cast<TMoments>(y2) * y;
+    const float res = butterflyWarpReduction<TMoments>(r0);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
-        smem[threadIdx.y][1] = butterflyWarpReduction<T>(r1); //1st
-        smem[threadIdx.y][2] = y * static_cast<T>(res); //1st
-        smem[threadIdx.y][3] = butterflyWarpReduction<T>(r2); //2nd
+        smem[threadIdx.y][1] = butterflyWarpReduction<TMoments>(r1); //1st
+        smem[threadIdx.y][2] = y * static_cast<TMoments>(res); //1st
+        smem[threadIdx.y][3] = butterflyWarpReduction<TMoments>(r2); //2nd
         smem[threadIdx.y][4] = smem[threadIdx.y][1] * y; //2nd
-        smem[threadIdx.y][5] = y2 * static_cast<T>(res); //2nd
-        smem[threadIdx.y][6] = butterflyWarpReduction<T>(r3); //3rd
+        smem[threadIdx.y][5] = y2 * static_cast<TMoments>(res); //2nd
+        smem[threadIdx.y][6] = butterflyWarpReduction<TMoments>(r3); //3rd
         smem[threadIdx.y][7] = smem[threadIdx.y][3] * y; //3rd
         smem[threadIdx.y][8] = smem[threadIdx.y][1] * y2; //3rd
-        smem[threadIdx.y][9] = y3 * static_cast<T>(res); //3rd
+        smem[threadIdx.y][9] = y3 * static_cast<TMoments>(res); //3rd
 
 
 
@@ -1374,90 +1374,99 @@ __global__ void ComputeCenteralMoments(const cuda::PtrStepSzb img, bool binary,
 //    CENTRAL
 //};
 
-template <typename T>
-void moments(const PtrStepSzb src, PtrStep<T> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
-    dim3 blockSize(blockSizeX, blockSizeY);
-    //dim3 gridSize(divUp(src.cols, blockSizeX), divUp(src.rows, blockSizeY));
-    // heuristic
-    // for double don't use
-    // for float use - minimal advantage -> check smaller
-    // add mixed precision - experimental option
-    // + above heuristic -> and host return, then run bench.
+template <typename TSrc, typename TMoments> struct momentsDispatcher {
+    static void call(const PtrStepSz<TSrc> src, PtrStep<TMoments> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+        // need extra overload when source is float -> can't hit here, place the other way around?
+        dim3 blockSize(blockSizeX, blockSizeY);
+        dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
+        if (mixedPrecision)
+            spatialMoments<TSrc, TMoments, false, false, float> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+        else
+            spatialMoments<TSrc, TMoments> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+
+        //if (stream == 0)
+        //    cudaSafeCall(cudaDeviceSynchronize());
+        if (stream == 0)
+            cudaSafeCall(cudaStreamSynchronize(stream));
+    };
+
+};
+
+// float, float -> 0
+// uchar, float -> 1
+// float, double -> 0
+// uchar, double -> 0
 
 
 
-    //ComputeSpatialMoments << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //ComputeSpatialMomentsSharedFullReductionS1 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //ComputeSpatialMomentsSharedFullReductionS2 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
-    //ComputeSpatialMomentsSharedFullReductionS3 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //if(binary)
+template <> struct momentsDispatcher<uchar, float> {
+    static void call(const PtrStepSz<uchar> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+        dim3 blockSize(blockSizeX, blockSizeY);
+        //dim3 gridSize(divUp(src.cols, blockSizeX), divUp(src.rows, blockSizeY));
+        //ComputeSpatialMoments << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+        dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
+        if (offsetX)
+            spatialMoments<uchar, float, true, false> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
+        else
+            spatialMoments<uchar, float, true, true> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
 
+        if (stream == 0)
+            cudaSafeCall(cudaStreamSynchronize(stream));
+        //printf("float\n");
 
-        //ComputeSpatialMomentsSharedFullReductionS3a<T> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //else
-    //    ComputeSpatialMomentsSharedFullReductionS3a<false> << <gridSize, blockSize, 0, stream >> > (src, moments.ptr());
+        //printf("double\n");
+    };
+};
 
-    // for double - if double can use extra mixed precision.
+template <typename TSrc, typename TMoments>
+void moments(const PtrStepSz<TSrc> src, PtrStep<TMoments> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+    momentsDispatcher<TSrc, TMoments>::call(src, moments, binary, mixedPrecision, offsetX, stream);
+};
 
+//template <typename TSrc>
+//template<>
+//void moments<float, float>(const PtrStepSz<float> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+//    dim3 blockSize(blockSizeX, blockSizeY);
+//    //dim3 gridSize(divUp(src.cols, blockSizeX), divUp(src.rows, blockSizeY));
+//    //ComputeSpatialMoments << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//    //ComputeSpatialMomentsSharedFullReductionS1 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//    //ComputeSpatialMomentsSharedFullReductionS2 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//    dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
+//
+//    // for float
+//    // S4 (coalesced is slower on double with offsets)
+//    if(offsetX)
+//        spatialMoments<float, float, true, false> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
+//        //ComputeSpatialMomentsSharedFullReductionS4<false, T> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
+//    else
+//        spatialMoments<float, float, true, true> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//        //ComputeSpatialMomentsSharedFullReductionS4<true, T> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//
+//
+//    if (stream == 0)
+//        cudaSafeCall(cudaDeviceSynchronize());
+//}
+//
+////template <typename TSrc>
+//template<>
+//void moments<float, double>(const PtrStepSz<float> src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+//    dim3 blockSize(blockSizeX, blockSizeY);
+//    dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
+//
+//    if(mixedPrecision)
+//        spatialMoments<float, double, false, false, float> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//    else
+//        spatialMoments<float, double> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//    //ComputeSpatialMomentsSharedFullReductionS3a<double> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+//
+//    if (stream == 0)
+//        cudaSafeCall(cudaDeviceSynchronize());
+//}
 
-    // for float
-    // S4 (coalesced is slower on double with offsets)
-    if(offsetX)
-        spatialMoments<float, true, false> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
-        //ComputeSpatialMomentsSharedFullReductionS4<false, T> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
-    else
-        spatialMoments<float, true, true> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-        //ComputeSpatialMomentsSharedFullReductionS4<true, T> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-
-    //blockSize = dim3(blockSizeX, 32);
-    //gridSize = dim3(divUp(src.rows, blockSizeY));
-    //ComputeSpatialMomentsSharedFullReductionS5 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-
-
-
-
-    //gridSize = dim3(divUp(src.cols/4, blockSizeX), divUp(src.rows, blockSizeY));
-    //ComputeSpatialMomentsSharedFullReductionCoaleced << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //if (computeCentral) {
-    //    //ComputeCentralMomentsShared << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), moments.ptr() + 1, moments.ptr() + 2, moments.ptr() + 10);
-    //    ComputeCenteroid1 << < dim3(1, 1, 1), dim3(1, 1, 1), 0, stream >> > (moments.ptr());
-    //    //ComputeCentralMomentsShared << <gridSize, blockSize, 0, cuda::StreamAccessor::getStream(stream) >> > (img, binary, momentsGpu.ptr<double>(0), momentsGpu.ptr<double>(0)+1, momentsGpu.ptr<double>(0)+2, momentsGpu.ptr<double>(0)+10);
-    //    ComputeCentralMomentsShared1 << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr()+17, moments.ptr()+10);
-    //}
-
-    if (stream == 0)
-        cudaSafeCall(cudaDeviceSynchronize());
-
-    // moments can be float or double
-    // can we request calculation to be float for spatial and double for the other
-    // need to request type of calc
-
-    // if spatial just do one
-    // central both
-
-    // all - need to normalize forget
-    // need a helper routine which downloads and normalizes the result
-
-
-}
-
-template <>
-void moments(const PtrStepSzb src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
-    dim3 blockSize(blockSizeX, blockSizeY);
-    dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
-
-    if(mixedPrecision)
-        spatialMoments<double, false, false, float> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    else
-        spatialMoments<double> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-    //ComputeSpatialMomentsSharedFullReductionS3a<double> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
-
-    if (stream == 0)
-        cudaSafeCall(cudaDeviceSynchronize());
-}
-
-template void moments<float>(const PtrStepSzb src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<uchar, float>(const PtrStepSz<uchar> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<float, float>(const PtrStepSz<float> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<uchar, double>(const PtrStepSz<uchar> src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<float, double>(const PtrStepSz<float> src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
 //template void moments<double>(const PtrStepSzb src, PtrStep<double> moments, const bool binary, const int offsetX, const cudaStream_t stream);
 
 //void Moments(const cv::cuda::GpuMat& img, bool binary) {
