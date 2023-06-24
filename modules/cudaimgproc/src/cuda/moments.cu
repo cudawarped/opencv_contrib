@@ -1374,8 +1374,8 @@ __global__ void ComputeCenteralMoments(const cuda::PtrStepSzb img, bool binary,
 //    CENTRAL
 //};
 
-template <typename TSrc, typename TMoments> struct momentsDispatcher {
-    static void call(const PtrStepSz<TSrc> src, PtrStep<TMoments> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+template <typename TSrc, typename TMoments> struct momentsDispatcher1 {
+    static void call(const PtrStepSz<TSrc> src, PtrStepSz<TMoments> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
         // need extra overload when source is float -> can't hit here, place the other way around?
         dim3 blockSize(blockSizeX, blockSizeY);
         dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
@@ -1393,22 +1393,22 @@ template <typename TSrc, typename TMoments> struct momentsDispatcher {
 };
 
 // float, float -> 0
-// uchar, float -> 1
+// uchar, float -> 1 and schar float?
 // float, double -> 0
 // uchar, double -> 0
 
 
 
-template <> struct momentsDispatcher<uchar, float> {
-    static void call(const PtrStepSz<uchar> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+template <typename TSrc> struct momentsDispatcherBytes {
+    static void call(const PtrStepSz<TSrc> src, PtrStepSz<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
         dim3 blockSize(blockSizeX, blockSizeY);
         //dim3 gridSize(divUp(src.cols, blockSizeX), divUp(src.rows, blockSizeY));
         //ComputeSpatialMoments << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
         dim3 gridSize = dim3(divUp(src.rows, blockSizeY));
         if (offsetX)
-            spatialMoments<uchar, float, true, false> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
+            spatialMoments<TSrc, float, true, false> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr(), offsetX);
         else
-            spatialMoments<uchar, float, true, true> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
+            spatialMoments<TSrc, float, true, true> << <gridSize, blockSize, 0, stream >> > (src, binary, moments.ptr());
 
         if (stream == 0)
             cudaSafeCall(cudaStreamSynchronize(stream));
@@ -1418,9 +1418,17 @@ template <> struct momentsDispatcher<uchar, float> {
     };
 };
 
+// add extra level of redirection here
+template <typename TSrc, typename TMoments> struct momentsDispatcher : momentsDispatcher1<TSrc, TMoments> {};
+template <> struct momentsDispatcher<uchar, float> : momentsDispatcherBytes<uchar> {};
+template <> struct momentsDispatcher<schar, float> : momentsDispatcherBytes<schar> {};
+
+
+
 template <typename TSrc, typename TMoments>
-void moments(const PtrStepSz<TSrc> src, PtrStep<TMoments> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
-    momentsDispatcher<TSrc, TMoments>::call(src, moments, binary, mixedPrecision, offsetX, stream);
+void moments(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream) {
+    // dispatcher could just be ... and should work?
+    momentsDispatcher<TSrc, TMoments>::call(static_cast<PtrStepSz<TSrc>>(src), static_cast<PtrStepSz<TMoments>>(moments), binary, mixedPrecision, offsetX, stream);
 };
 
 //template <typename TSrc>
@@ -1463,10 +1471,21 @@ void moments(const PtrStepSz<TSrc> src, PtrStep<TMoments> moments, const bool bi
 //        cudaSafeCall(cudaDeviceSynchronize());
 //}
 
-template void moments<uchar, float>(const PtrStepSz<uchar> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
-template void moments<float, float>(const PtrStepSz<float> src, PtrStep<float> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
-template void moments<uchar, double>(const PtrStepSz<uchar> src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
-template void moments<float, double>(const PtrStepSz<float> src, PtrStep<double> moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<uchar, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<schar, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<ushort, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<short, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<int, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<float, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<double, float>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+
+template void moments<uchar, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<schar, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<ushort, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<short, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<int, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<float, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
+template void moments<double, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const bool mixedPrecision, const int offsetX, const cudaStream_t stream);
 //template void moments<double>(const PtrStepSzb src, PtrStep<double> moments, const bool binary, const int offsetX, const cudaStream_t stream);
 
 //void Moments(const cv::cuda::GpuMat& img, bool binary) {

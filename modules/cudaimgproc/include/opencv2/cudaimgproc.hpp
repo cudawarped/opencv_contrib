@@ -153,7 +153,10 @@ CV_EXPORTS_W void createGpuMoments(GpuMat& moments, const int depth = CV_64F);
 //    CENTRAL
 //};
 
-CV_EXPORTS_W bool moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, Stream& stream = Stream::Null());
+CV_EXPORTS_W void moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, Stream& stream = Stream::Null());
+
+// convenience func internally allocates host memory and uses default stream for maximum performace use ....
+CV_EXPORTS_W cv::Moments moments(InputArray src, const bool binary, const int momentsType = CV_64F);
 
 
 /** @brief Exchanges the color channels of an image in-place.
