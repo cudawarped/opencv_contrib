@@ -3,7 +3,8 @@
 // of this distribution and at http://opencv.org/license.html.
 
 #include "precomp.hpp"
-#include "cuda\moments.cuh"
+#include "cuda/moments.cuh"
+
 
 using namespace cv;
 using namespace cv::cuda;
