@@ -44,7 +44,7 @@ __device__ void updateSums(const float val, const unsigned int x, float& r0, T& 
 }
 
 template<typename TSrc, typename TMoments, int nMoments>
-__device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, TMoments smem[][nMoments]) {
+__device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, TMoments smem[][nMoments + 1]) {
     for (int x = threadIdx.x; x < img.cols; x += blockDim.x) {
         const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
         updateSums<TMoments,nMoments>(val, x, r0, r1, r2, r3);
@@ -52,7 +52,7 @@ __device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, cons
 }
 
 template<typename TSrc, typename TMoments, bool fourByteAligned, int nMoments>
-__device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, const int offsetX, TMoments smem[][nMoments]) {
+__device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, const int offsetX, TMoments smem[][nMoments + 1]) {
     const int alignedOffset = fourByteAligned ? 0 : 4 - offsetX;
     // load uncoalesced head
     if (!fourByteAligned && threadIdx.x == 0) {
@@ -89,7 +89,7 @@ __device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool bin
 template <typename TSrc, typename TMoments, bool coalesced = false, bool fourByteAligned = false, int nMoments>
 __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMoments* moments, const int offsetX = 0) {
     const unsigned int y = blockIdx.x * blockDim.y + threadIdx.y;
-    __shared__ TMoments smem[blockSizeY][nMoments];
+    __shared__ TMoments smem[blockSizeY][nMoments + 1];
     if (threadIdx.y < nMoments && threadIdx.x < blockSizeY)
         smem[threadIdx.x][threadIdx.y] = 0;
     __syncthreads();
@@ -108,29 +108,34 @@ __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMo
     const float res = butterflyWarpReduction<float>(r0);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
-        smem[threadIdx.y][1] = butterflyWarpReduction<TMoments>(r1); //1st
+        TMoments t1 = butterflyWarpReduction<TMoments>(r1); //1st
+        smem[threadIdx.y][1] = t1;
         smem[threadIdx.y][2] = y * static_cast<TMoments>(res); //1st
+        TMoments t3;
         if (nMoments >= n12) {
-            smem[threadIdx.y][3] = butterflyWarpReduction<TMoments>(r2); //2nd
-            smem[threadIdx.y][4] = smem[threadIdx.y][1] * y; //2nd
+            t3 = butterflyWarpReduction<TMoments>(r2); //2nd
+            smem[threadIdx.y][3] = t3;
+            smem[threadIdx.y][4] = t1 * y; //2nd
             smem[threadIdx.y][5] = y2 * static_cast<TMoments>(res); //2nd
         }
         if (nMoments >= n123) {
             smem[threadIdx.y][6] = butterflyWarpReduction<TMoments>(r3); //3rd
-            smem[threadIdx.y][7] = smem[threadIdx.y][3] * y; //3rd
-            smem[threadIdx.y][8] = smem[threadIdx.y][1] * y2; //3rd
+            smem[threadIdx.y][7] = t3 * y; //3rd
+            smem[threadIdx.y][8] = t1 * y2; //3rd
             smem[threadIdx.y][9] = y3 * static_cast<TMoments>(res); //3rd
         }
     }
     __syncthreads();
 
-    if (threadIdx.x < blockSizeY && threadIdx.y < nMoments)
-            smem[threadIdx.y][0] = butterflyHalfWarpReduction(smem[threadIdx.x][threadIdx.y]);
+    if (threadIdx.x < blockSizeY && threadIdx.y < nMoments) {
+        TMoments t = butterflyHalfWarpReduction(smem[threadIdx.x][threadIdx.y]);
+        smem[threadIdx.y][nMoments] = t;
+    }
     __syncthreads();
 
     if (threadIdx.y == 0 && threadIdx.x < nMoments) {
-        if (smem[threadIdx.x][0])
-            cudev::atomicAdd(&moments[threadIdx.x], smem[threadIdx.x][0]);
+        if (smem[threadIdx.x][nMoments])
+            cudev::atomicAdd(&moments[threadIdx.x], smem[threadIdx.x][nMoments]);
     }
 }
 
