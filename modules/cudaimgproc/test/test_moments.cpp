@@ -11,7 +11,9 @@ namespace opencv_test { namespace {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 // Moments
 
-PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, int, int, bool, MomentsOrder)
+CV_ENUM(MaxMomentsOrder, MomentsOrder::FIRST, MomentsOrder::SECOND, MomentsOrder::THIRD)
+
+PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, MatDepth, MatDepth, UseRoi, MaxMomentsOrder)
 {
     DeviceInfo devInfo;
     Size size;
@@ -30,7 +32,7 @@ PARAM_TEST_CASE(Moments, cv::cuda::DeviceInfo, cv::Size, bool, int, int, bool, M
         momentsType = GET_PARAM(3);
         imgType = GET_PARAM(4);
         useRoi = GET_PARAM(5);
-        order = GET_PARAM(6);
+        order = static_cast<MomentsOrder>(static_cast<int>(GET_PARAM(6)));
         cv::cuda::setDevice(devInfo.deviceID());
     }
 
@@ -112,12 +114,11 @@ CUDA_TEST_P(Moments, Async)
 
 #define SIZES DIFFERENT_SIZES
 #define GRAYSCALE_BINARY testing::Bool()
-#define MOMENTS_TYPE testing::Values(CV_32F, CV_64F)
+#define MOMENTS_TYPE testing::Values(MatDepth(CV_32F), MatDepth(CV_64F))
 #define IMG_TYPE ALL_DEPTH
-#define USE_ROI testing::Bool()
-#define MOMENTS_ORDER testing::Values(MomentsOrder::FIRST, MomentsOrder::SECOND, MomentsOrder::THIRD)
+#define USE_ROI WHOLE_SUBMAT
+#define MOMENTS_ORDER testing::Values(MaxMomentsOrder(MomentsOrder::FIRST), MaxMomentsOrder(MomentsOrder::SECOND), MaxMomentsOrder(MomentsOrder::THIRD))
 INSTANTIATE_TEST_CASE_P(CUDA_ImgProc, Moments, testing::Combine(ALL_DEVICES, SIZES, GRAYSCALE_BINARY, MOMENTS_TYPE, IMG_TYPE, USE_ROI, MOMENTS_ORDER));
 }} // namespace
-
 
 #endif // HAVE_CUDA

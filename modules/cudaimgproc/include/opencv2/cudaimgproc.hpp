@@ -790,7 +790,7 @@ CV_EXPORTS_W void connectedComponents(InputArray image, OutputArray labels,
  * @param SECOND Second order moments.
  * @param THIRD Third order moments.
  * */
-enum class MomentsOrder {
+enum MomentsOrder {
     FIRST = 1,
     SECOND = 2,
     THIRD = 3
