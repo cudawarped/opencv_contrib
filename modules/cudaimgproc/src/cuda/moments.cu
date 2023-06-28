@@ -108,20 +108,18 @@ __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMo
     const float res = butterflyWarpReduction<float>(r0);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
-        TMoments t1 = butterflyWarpReduction<TMoments>(r1); //1st
-        smem[threadIdx.y][1] = t1;
+        smem[threadIdx.y][1] = butterflyWarpReduction<TMoments>(r1); //1st
         smem[threadIdx.y][2] = y * static_cast<TMoments>(res); //1st
         TMoments t3;
         if (nMoments >= n12) {
-            t3 = butterflyWarpReduction<TMoments>(r2); //2nd
-            smem[threadIdx.y][3] = t3;
-            smem[threadIdx.y][4] = t1 * y; //2nd
+            smem[threadIdx.y][3] = butterflyWarpReduction<TMoments>(r2); //2nd
+            smem[threadIdx.y][4] = smem[threadIdx.y][1] * y; //2nd
             smem[threadIdx.y][5] = y2 * static_cast<TMoments>(res); //2nd
         }
         if (nMoments >= n123) {
             smem[threadIdx.y][6] = butterflyWarpReduction<TMoments>(r3); //3rd
-            smem[threadIdx.y][7] = t3 * y; //3rd
-            smem[threadIdx.y][8] = t1 * y2; //3rd
+            smem[threadIdx.y][7] = smem[threadIdx.y][3] * y; //3rd
+            smem[threadIdx.y][8] = smem[threadIdx.y][1] * y2; //3rd
             smem[threadIdx.y][9] = y3 * static_cast<TMoments>(res); //3rd
         }
     }
