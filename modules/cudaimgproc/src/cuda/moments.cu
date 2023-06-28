@@ -5,9 +5,10 @@
 #if !defined CUDA_DISABLER
 
 #include "opencv2/core/cuda/common.hpp"
-#include "opencv2/core/cuda/functional.hpp"
-#include "opencv2/core/cuda/emulation.hpp"
-#include "opencv2/core/cuda/transform.hpp"
+#include <opencv2/cudev/util/atomic.hpp>
+//#include "opencv2/core/cuda/functional.hpp"
+//#include "opencv2/core/cuda/emulation.hpp"
+//#include "opencv2/core/cuda/transform.hpp"
 #include "moments.cuh"
 
 using namespace cv::cuda;
@@ -129,7 +130,7 @@ __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMo
 
     if (threadIdx.y == 0 && threadIdx.x < nMoments) {
         if (smem[threadIdx.x][0])
-            atomicAdd(&moments[threadIdx.x], smem[threadIdx.x][0]);
+            cudev::atomicAdd(&moments[threadIdx.x], smem[threadIdx.x][0]);
     }
 }
 
