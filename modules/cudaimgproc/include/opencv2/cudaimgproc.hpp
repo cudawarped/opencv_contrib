@@ -57,6 +57,7 @@
     @{
       @defgroup cudaimgproc_color Color space processing
       @defgroup cudaimgproc_hist Histogram Calculation
+      @defgroup cudaimgproc_shape Structural Analysis and Shape Descriptors
       @defgroup cudaimgproc_hough Hough Transform
       @defgroup cudaimgproc_feature Feature Detection
     @}
@@ -134,30 +135,6 @@ The function can do the following transformations:
 @sa cvtColor
  */
 CV_EXPORTS_W void demosaicing(InputArray src, OutputArray dst, int code, int dcn = -1, Stream& stream = Stream::Null());
-
-/** @brief Calculates all of the moments up to the third order of a rasterized shape.
-
-The function computes moments, up to the 3rd order, of a rasterized shape. The
-results are returned in the structure cv::Moments.
-
-@param array Raster image (single-channel, 8-bit).
-@param binaryImage If it is true, all non-zero image pixels are treated as 1's.
-@returns moments.
- */
-//CV_EXPORTS_W Moments moments( InputArray array, bool binaryImage = false );
-
-CV_EXPORTS_W void createGpuMoments(GpuMat& moments, const int depth = CV_64F);
-
-//enum MomentType {
-//    SPATIAL,
-//    CENTRAL
-//};
-
-CV_EXPORTS_W void moments(InputArray array, OutputArray moments, const bool binaryImage = false, const bool mixedPrecision = false, Stream& stream = Stream::Null());
-
-// convenience func internally allocates host memory and uses default stream for maximum performace use ....
-CV_EXPORTS_W cv::Moments moments(InputArray src, const bool binary, const int momentsType = CV_64F);
-
 
 /** @brief Exchanges the color channels of an image in-place.
 
@@ -803,8 +780,83 @@ CV_EXPORTS_AS(connectedComponentsWithAlgorithm) void connectedComponents(InputAr
 CV_EXPORTS_W void connectedComponents(InputArray image, OutputArray labels,
     int connectivity = 8, int ltype = CV_32S);
 
-
 //! @}
+
+//! @addtogroup cudaimgproc_shape
+//! @{
+
+ /** @brief Order of image moments.
+ * @param FIRST First order moments
+ * @param SECOND Second order moments.
+ * @param THIRD Third order moments.
+ * */
+enum class MomentsOrder {
+    FIRST = 1,
+    SECOND = 2,
+    THIRD = 3
+};
+
+/** @brief Returns the number of image moments less than or equal to the largest image moments \a order.
+@param order Order of largest moments to calculate with lower order moments requiring less computation.
+@returns number of image moments.
+
+@sa cuda::moments, cuda::spatialMoments, cuda::MomentsOrder
+ */
+CV_EXPORTS_W int numMoments(const MomentsOrder order);
+
+/** @brief Calculates all of the spatial moments up to the third order of a rasterized shape.
+
+Asynchronous version of cuda::moments() which only calculates the spatial (not centralized or normalized)  moments, up to the 3rd order, of a rasterized shape.
+Each moment is returned as a column entry in the 1D \a moments array.
+
+@param array Raster image (single-channel 2D array).
+@param [out] moments 1D array containing the spatial image moments.
+@param binaryImage If it is true, all non-zero image pixels are treated as 1's.
+@param order Order of largest moments to calculate with lower order moments requiring less computation.
+@param momentsType Precision to use when calculating moments. Available types are `CV_32F` and `CV_64F` with the performance of `CV_32F` an order of magnitude greater than `CV_64F`. If the image is small the accuracy from `CV_32F` can be equal or very close to `CV_64F`.
+
+@note For maximum performance pre-allocate a 1D GpuMat for \a moments of the correct type and size large enough to store the all the image moments of up to the desired \a order. e.g. With \a order === MomentsOrder::SECOND and \a momentsType == `CV_32F` \a moments can be allocated as
+```
+GpuMat momentsDevice(1,numMoments(MomentsOrder::SECOND),CV_32F)
+```
+The central and normalized moments can easily be calculated on the host by downloading the \a moments array and using the cv::Moments constructor. e.g.
+```
+HostMem momentsHostMem(1, numMoments(MomentsOrder::SECOND), CV_32F);
+momentsDevice.download(momentsHostMem, stream);
+stream.waitForCompletion();
+Mat momentsMat = momentsHostMem.createMatHeader();
+cv::Moments cvMoments(momentsMat.at<float>(0), momentsMat.at<float>(1), momentsMat.at<float>(2), momentsMat.at<float>(3), momentsMat.at<float>(4), momentsMat.at<float>(5), momentsMat.at<float>(6), momentsMat.at<float>(7), momentsMat.at<float>(8), momentsMat.at<float>(9));
+```
+see the \a CUDA_TEST_P(Moments, Async) test inside opencv_contrib_source_code/modules/cudaimgproc/test/test_moments.cpp for an example.
+@returns cv::Moments.
+@sa cuda::moments
+*/
+CV_EXPORTS_W void spatialMoments(InputArray array, OutputArray moments, const bool binaryImage = false, const MomentsOrder order = MomentsOrder::THIRD, const int momentsType = CV_64F, Stream& stream = Stream::Null());
+
+
+/** @brief Calculates all of the moments up to the third order of a rasterized shape.
+
+The function computes moments, up to the 3rd order, of a rasterized shape. The
+results are returned in the structure cv::Moments.
+
+@param array Raster image (single-channel 2D array).
+@param binaryImage If it is true, all non-zero image pixels are treated as 1's.
+@param order Order of largest moments to calculate with lower order moments requiring less computation.
+ @param momentsType Precision to use when calculating moments. Available types are `CV_32F` and `CV_64F` with the performance of `CV_32F` an order of magnitude greater than `CV_64F`. If the image is small the accuracy from `CV_32F` can be equal or very close to `CV_64F`.
+
+@note For maximum performance use the asynchronous version cuda::spatialMoments() as this version interally allocates both GpuMat and HostMem to respectively perform the calculation on the device and download the result to the host.
+The device allocation can be avoided by using BufferPool, e.g.
+```
+    setBufferPoolUsage(true);
+    setBufferPoolConfig(getDevice(), numMoments(order) * ((momentsType == CV_64F) ? sizeof(double) : sizeof(float)), 1);
+```
+see the \a CUDA_TEST_P(Moments, Accuracy) test inside opencv_contrib_source_code/modules/cudaimgproc/test/test_moments.cpp for an example.
+@returns cv::Moments.
+@sa cuda::spatialMoments
+ */
+CV_EXPORTS_W cv::Moments moments(InputArray src, const bool binary, const MomentsOrder order = MomentsOrder::THIRD, const int momentsType = CV_64F);
+
+//! @} cudaimgproc_shape
 
 }} // namespace cv { namespace cuda {
 
