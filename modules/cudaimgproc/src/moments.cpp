@@ -54,8 +54,10 @@ void cv::cuda::spatialMoments(InputArray src, OutputArray moments, const bool bi
 }
 
 Moments cv::cuda::moments(InputArray src, const bool binary, const MomentsOrder order, const int momentsType) {
+    Stream& stream = Stream::Null();
     HostMem dst;
-    spatialMoments(src, dst, binary, order, momentsType);
+    spatialMoments(src, dst, binary, order, momentsType, stream);
+    stream.waitForCompletion();
     Mat moments = dst.createMatHeader();
     if(momentsType == CV_32F)
         return Moments(moments.at<float>(0), moments.at<float>(1), moments.at<float>(2), moments.at<float>(3), moments.at<float>(4), moments.at<float>(5), moments.at<float>(6), moments.at<float>(7), moments.at<float>(8), moments.at<float>(9));

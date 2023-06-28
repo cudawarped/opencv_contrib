@@ -105,7 +105,7 @@ __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMo
 
     const unsigned long y2 = y * y;
     const TMoments y3 = static_cast<TMoments>(y2) * y;
-    const float res = butterflyWarpReduction<TMoments>(r0);
+    const float res = butterflyWarpReduction<float>(r0);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
         smem[threadIdx.y][1] = butterflyWarpReduction<TMoments>(r1); //1st
