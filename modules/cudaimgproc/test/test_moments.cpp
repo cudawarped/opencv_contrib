@@ -78,8 +78,8 @@ CUDA_TEST_P(Moments, Accuracy)
     const Vec3i circle(size.width / 2, size.height / 2, static_cast<int>(static_cast<float>(size.width/2) * pcWidth));
     drawCircle(imgHost, circle, true);
     const GpuMat imgDevice(imgHost);
-    setBufferPoolUsage(true);
     const int nMoments = numMoments(order);
+    setBufferPoolUsage(true);
     setBufferPoolConfig(getDevice(), nMoments * ((momentsType == CV_64F) ? sizeof(double) : sizeof(float)), 1);
     const cv::Moments moments = cuda::moments(imgDevice(roi), isBinary, order, momentsType);
     Mat imgHostFloat; imgHost(roi).convertTo(imgHostFloat, CV_32F);

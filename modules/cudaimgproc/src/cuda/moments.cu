@@ -4,15 +4,9 @@
 
 #if !defined CUDA_DISABLER
 
-#include "opencv2/core/cuda/common.hpp"
+#include <opencv2/core/cuda/common.hpp>
 #include <opencv2/cudev/util/atomic.hpp>
-//#include "opencv2/core/cuda/functional.hpp"
-//#include "opencv2/core/cuda/emulation.hpp"
-//#include "opencv2/core/cuda/transform.hpp"
 #include "moments.cuh"
-
-using namespace cv::cuda;
-using namespace cv::cuda::device;
 
 namespace cv { namespace cuda { namespace device { namespace imgproc {
 
@@ -34,31 +28,31 @@ __device__ T butterflyHalfWarpReduction(T value) {
 }
 
 template<typename T, int nMoments>
-__device__ void updateSums(const float val, const unsigned int x, float& r0, T& r1, T& r2, T& r3) {
+__device__ void updateSums(const T val, const unsigned int x, T r[4]) {
     const T x2 = x * x;
     const T x3 = static_cast<T>(x) * x2;
-    r0 += val;
-    r1 += val * x;
-    if (nMoments >= n12) r2 += val * x2;
-    if (nMoments >= n123) r3 += val * x3;
+    r[0] += val;
+    r[1] += val * x;
+    if (nMoments >= n12) r[2] += val * x2;
+    if (nMoments >= n123) r[3] += val * x3;
 }
 
 template<typename TSrc, typename TMoments, int nMoments>
-__device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, TMoments smem[][nMoments + 1]) {
+__device__ void rowReductions(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, TMoments r[4], TMoments smem[][nMoments + 1]) {
     for (int x = threadIdx.x; x < img.cols; x += blockDim.x) {
-        const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-        updateSums<TMoments,nMoments>(val, x, r0, r1, r2, r3);
+        const TMoments val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
+        updateSums<TMoments,nMoments>(val, x, r);
     }
 }
 
 template<typename TSrc, typename TMoments, bool fourByteAligned, int nMoments>
-__device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, float& r0, TMoments& r1, TMoments& r2, TMoments& r3, const int offsetX, TMoments smem[][nMoments + 1]) {
+__device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool binary, const unsigned int y, TMoments r[4], const int offsetX, TMoments smem[][nMoments + 1]) {
     const int alignedOffset = fourByteAligned ? 0 : 4 - offsetX;
     // load uncoalesced head
     if (!fourByteAligned && threadIdx.x == 0) {
         for (int x = 0; x < ::min(alignedOffset, static_cast<int>(img.cols)); x++) {
-            const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-            updateSums<TMoments, nMoments>(val, x, r0, r1, r2, r3);
+            const TMoments val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
+            updateSums<TMoments, nMoments>(val, x, r);
         }
     }
 
@@ -71,8 +65,8 @@ __device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool bin
         for (int i = 0; i < 4; i++) {
             const int iX = alignedOffset + 4 * x + i;
             const uchar ucharVal = ((data >> i * 8) & 0xFFU);
-            const float val = (!binary || ucharVal == 0) ? ucharVal : 1;
-            updateSums<TMoments, nMoments>(val, iX, r0, r1, r2, r3);
+            const TMoments val = (!binary || ucharVal == 0) ? ucharVal : 1;
+            updateSums<TMoments, nMoments>(val, iX, r);
         }
     }
 
@@ -80,8 +74,8 @@ __device__ void rowReductionsCoalesced(const PtrStepSz<TSrc> img, const bool bin
     if (threadIdx.x == 0) {
         const int iTailStart = fourByteAligned ? cols4 * 4 : cols4 * 4 + alignedOffset;
         for (int x = iTailStart; x < img.cols; x++) {
-            const float val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
-            updateSums<TMoments, nMoments>(val, x, r0, r1, r2, r3);
+            const TMoments val = (!binary || img(y, x) == 0) ? img(y, x) : 1;
+            updateSums<TMoments, nMoments>(val, x, r);
         }
     }
 }
@@ -94,40 +88,37 @@ __global__ void spatialMoments(const PtrStepSz<TSrc> img, const bool binary, TMo
         smem[threadIdx.x][threadIdx.y] = 0;
     __syncthreads();
 
-    float r0 = 0;
-    TMoments r1 = 0, r2 = 0, r3 = 0;
+    TMoments r[4] = { 0 };
     if (y < img.rows) {
         if (coalesced)
-            rowReductionsCoalesced<TSrc, TMoments, fourByteAligned, nMoments>(img, binary, y, r0, r1, r2, r3, offsetX, smem);
+            rowReductionsCoalesced<TSrc, TMoments, fourByteAligned, nMoments>(img, binary, y, r, offsetX, smem);
         else
-            rowReductions<TSrc, TMoments, nMoments>(img, binary, y, r0, r1, r2, r3, smem);
+            rowReductions<TSrc, TMoments, nMoments>(img, binary, y, r, smem);
     }
 
     const unsigned long y2 = y * y;
     const TMoments y3 = static_cast<TMoments>(y2) * y;
-    const float res = butterflyWarpReduction<float>(r0);
+    const TMoments res = butterflyWarpReduction<float>(r[0]);
     if (res) {
         smem[threadIdx.y][0] = res; //0th
-        smem[threadIdx.y][1] = butterflyWarpReduction<TMoments>(r1); //1st
-        smem[threadIdx.y][2] = y * static_cast<TMoments>(res); //1st
+        smem[threadIdx.y][1] = butterflyWarpReduction(r[1]); //1st
+        smem[threadIdx.y][2] = y * res; //1st
         if (nMoments >= n12) {
-            smem[threadIdx.y][3] = butterflyWarpReduction<TMoments>(r2); //2nd
+            smem[threadIdx.y][3] = butterflyWarpReduction(r[2]); //2nd
             smem[threadIdx.y][4] = smem[threadIdx.y][1] * y; //2nd
-            smem[threadIdx.y][5] = y2 * static_cast<TMoments>(res); //2nd
+            smem[threadIdx.y][5] = y2 * res; //2nd
         }
         if (nMoments >= n123) {
-            smem[threadIdx.y][6] = butterflyWarpReduction<TMoments>(r3); //3rd
+            smem[threadIdx.y][6] = butterflyWarpReduction(r[3]); //3rd
             smem[threadIdx.y][7] = smem[threadIdx.y][3] * y; //3rd
             smem[threadIdx.y][8] = smem[threadIdx.y][1] * y2; //3rd
-            smem[threadIdx.y][9] = y3 * static_cast<TMoments>(res); //3rd
+            smem[threadIdx.y][9] = y3 * res; //3rd
         }
     }
     __syncthreads();
 
-    if (threadIdx.x < blockSizeY && threadIdx.y < nMoments) {
-        TMoments t = butterflyHalfWarpReduction(smem[threadIdx.x][threadIdx.y]);
-        smem[threadIdx.y][nMoments] = t;
-    }
+    if (threadIdx.x < blockSizeY && threadIdx.y < nMoments)
+        smem[threadIdx.y][nMoments] = butterflyHalfWarpReduction(smem[threadIdx.x][threadIdx.y]);
     __syncthreads();
 
     if (threadIdx.y == 0 && threadIdx.x < nMoments) {
@@ -144,7 +135,6 @@ template <typename TSrc, typename TMoments, int nMoments> struct momentsDispatch
         if (stream == 0)
             cudaSafeCall(cudaStreamSynchronize(stream));
     };
-
 };
 
 template <typename TSrc, int nMoments> struct momentsDispatcherChar {
@@ -192,6 +182,5 @@ template void moments<float, double>(const PtrStepSzb src, PtrStepSzb moments, c
 template void moments<double, double>(const PtrStepSzb src, PtrStepSzb moments, const bool binary, const int order, const int offsetX, const cudaStream_t stream);
 
 }}}}
-
 
 #endif /* CUDA_DISABLER */

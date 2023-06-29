@@ -5,7 +5,6 @@
 #include "precomp.hpp"
 #include "cuda/moments.cuh"
 
-
 using namespace cv;
 using namespace cv::cuda;
 

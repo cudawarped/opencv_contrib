@@ -804,13 +804,13 @@ enum MomentsOrder {
  */
 CV_EXPORTS_W int numMoments(const MomentsOrder order);
 
-/** @brief Calculates all of the spatial moments up to the third order of a rasterized shape.
+/** @brief Calculates all of the spatial moments up to the 3rd order of a rasterized shape.
 
-Asynchronous version of cuda::moments() which only calculates the spatial (not centralized or normalized)  moments, up to the 3rd order, of a rasterized shape.
+Asynchronous version of cuda::moments() which only calculates the spatial (not centralized or normalized) moments, up to the 3rd order, of a rasterized shape.
 Each moment is returned as a column entry in the 1D \a moments array.
 
 @param array Raster image (single-channel 2D array).
-@param [out] moments 1D array containing the spatial image moments.
+@param [out] moments 1D array with each column entry containing a spatial image moment.
 @param binaryImage If it is true, all non-zero image pixels are treated as 1's.
 @param order Order of largest moments to calculate with lower order moments requiring less computation.
 @param momentsType Precision to use when calculating moments. Available types are `CV_32F` and `CV_64F` with the performance of `CV_32F` an order of magnitude greater than `CV_64F`. If the image is small the accuracy from `CV_32F` can be equal or very close to `CV_64F`.
@@ -833,8 +833,7 @@ see the \a CUDA_TEST_P(Moments, Async) test inside opencv_contrib_source_code/mo
 */
 CV_EXPORTS_W void spatialMoments(InputArray array, OutputArray moments, const bool binaryImage = false, const MomentsOrder order = MomentsOrder::THIRD, const int momentsType = CV_64F, Stream& stream = Stream::Null());
 
-
-/** @brief Calculates all of the moments up to the third order of a rasterized shape.
+/** @brief Calculates all of the moments up to the 3rd order of a rasterized shape.
 
 The function computes moments, up to the 3rd order, of a rasterized shape. The
 results are returned in the structure cv::Moments.
@@ -844,8 +843,8 @@ results are returned in the structure cv::Moments.
 @param order Order of largest moments to calculate with lower order moments requiring less computation.
  @param momentsType Precision to use when calculating moments. Available types are `CV_32F` and `CV_64F` with the performance of `CV_32F` an order of magnitude greater than `CV_64F`. If the image is small the accuracy from `CV_32F` can be equal or very close to `CV_64F`.
 
-@note For maximum performance use the asynchronous version cuda::spatialMoments() as this version interally allocates both GpuMat and HostMem to respectively perform the calculation on the device and download the result to the host.
-The device allocation can be avoided by using BufferPool, e.g.
+@note For maximum performance use the asynchronous version cuda::spatialMoments() as this version interally allocates and deallocates both GpuMat and HostMem to respectively perform the calculation on the device and download the result to the host.
+The costly HostMem allocation cannot be avoided however the GpuMat device allocation can be by using BufferPool, e.g.
 ```
     setBufferPoolUsage(true);
     setBufferPoolConfig(getDevice(), numMoments(order) * ((momentsType == CV_64F) ? sizeof(double) : sizeof(float)), 1);
