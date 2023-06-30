@@ -151,7 +151,7 @@ CUDA_TEST_P(CheckExtraData, Reader)
 
     cv::cuda::setDevice(GET_PARAM(0).deviceID());
     const string path = get<0>(GET_PARAM(1));
-    const int sz = get<1>(GET_PARAM(1));
+    const size_t sz = get<1>(GET_PARAM(1));
     std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "../" + path;
     cv::cudacodec::VideoReaderInitParams params;
     params.rawMode = true;
@@ -190,8 +190,7 @@ CUDA_TEST_P(CheckKeyFrame, Reader)
         ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB,N));
         for (int i = static_cast<int>(rawIdxBase); i < static_cast<int>(N + rawIdxBase); i++) {
             nPackages++;
-            double containsKeyFrame = i;
-            ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_LRF_HAS_KEY_FRAME, containsKeyFrame));
+            const bool containsKeyFrame = reader->rawPackageHasKeyFrame(i);
             ASSERT_TRUE((nPackages == 1 && containsKeyFrame) || (nPackages == 2 && !containsKeyFrame)) << "nPackage: " << i;
             if (nPackages >= maxNPackagesToCheck)
                 break;
@@ -272,9 +271,7 @@ CUDA_TEST_P(DisplayResolution, Reader)
         readerCodedSz->set(cudacodec::ColorFormat::GRAY);
         GpuMat frameCodedSz;
         ASSERT_TRUE(readerCodedSz->nextFrame(frameCodedSz));
-        const cudacodec::FormatInfo formatCodedSz = readerCodedSz->format();
-        const double err = cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF);
-        ASSERT_TRUE(err == 0);
+        ASSERT_EQ(cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF), 0);
     }
 }
 
@@ -412,8 +409,9 @@ CUDA_TEST_P(ReconfigureDecoder, Reader)
         ASSERT_TRUE(frame.size() == initialSize);
         ASSERT_TRUE(fmt.srcRoi.empty());
         const bool resChanged = (initialCodedSize.width != fmt.ulWidth) || (initialCodedSize.height != fmt.ulHeight);
-        if (resChanged)
+        if (resChanged) {
             ASSERT_TRUE(fmt.targetRoi.empty());
+        }
     }
     ASSERT_TRUE(nFrames == 40);
 }
@@ -501,7 +499,7 @@ CUDA_TEST_P(CheckParams, Reader)
     {
         std::vector<bool> exceptionsThrown = { false,true };
         std::vector<int> capPropFormats = { -1,0 };
-        for (int i = 0; i < capPropFormats.size(); i++) {
+        for (size_t i = 0; i < capPropFormats.size(); i++) {
             bool exceptionThrown = false;
             try {
                 cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile, {
