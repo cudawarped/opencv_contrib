@@ -164,7 +164,7 @@ VideoWriterImpl::VideoWriterImpl(const Ptr<EncoderCallback>& encoderCallBack_, c
     CV_Assert(colorFormat != ColorFormat::UNDEFINED);
     surfaceFormat = EncBufferFormat(colorFormat);
     if (surfaceFormat == NV_ENC_BUFFER_FORMAT_UNDEFINED) {
-        String msg = cv::format("Unsupported input surface format: %i", colorFormat);
+        String msg = cv::format("Unsupported input surface format: %i", static_cast<int>(colorFormat));
         CV_LOG_WARNING(NULL, msg);
         CV_Error(Error::StsUnsupportedFormat, msg);
     }

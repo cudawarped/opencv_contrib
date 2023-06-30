@@ -163,7 +163,7 @@ CUDA_TEST_P(CheckExtraData, Reader)
     cv::Mat extraData;
     const bool newData = reader->retrieve(extraData, static_cast<size_t>(extraDataIdx));
     ASSERT_TRUE((newData && sz) || (!newData && !sz));
-    ASSERT_EQ(extraData.total(), sz);
+    ASSERT_EQ(extraData.total(), static_cast<size_t>(sz));
 }
 
 CUDA_TEST_P(CheckKeyFrame, Reader)
@@ -272,9 +272,7 @@ CUDA_TEST_P(DisplayResolution, Reader)
         readerCodedSz->set(cudacodec::ColorFormat::GRAY);
         GpuMat frameCodedSz;
         ASSERT_TRUE(readerCodedSz->nextFrame(frameCodedSz));
-        const cudacodec::FormatInfo formatCodedSz = readerCodedSz->format();
-        const double err = cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF);
-        ASSERT_TRUE(err == 0);
+        ASSERT_TRUE(cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF) == 0);
     }
 }
 
@@ -412,8 +410,9 @@ CUDA_TEST_P(ReconfigureDecoder, Reader)
         ASSERT_TRUE(frame.size() == initialSize);
         ASSERT_TRUE(fmt.srcRoi.empty());
         const bool resChanged = (initialCodedSize.width != fmt.ulWidth) || (initialCodedSize.height != fmt.ulHeight);
-        if (resChanged)
+        if (resChanged) {
             ASSERT_TRUE(fmt.targetRoi.empty());
+        }
     }
     ASSERT_TRUE(nFrames == 40);
 }
@@ -501,7 +500,7 @@ CUDA_TEST_P(CheckParams, Reader)
     {
         std::vector<bool> exceptionsThrown = { false,true };
         std::vector<int> capPropFormats = { -1,0 };
-        for (int i = 0; i < capPropFormats.size(); i++) {
+        for (size_t i = 0; i < capPropFormats.size(); i++) {
             bool exceptionThrown = false;
             try {
                 cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile, {

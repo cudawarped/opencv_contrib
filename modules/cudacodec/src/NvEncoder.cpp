@@ -534,9 +534,10 @@ void NvEncoder::UnregisterInputResources()
 }
 
 
+#if defined(_WIN32)
 void NvEncoder::WaitForCompletionEvent(int iEvent)
 {
-#if defined(_WIN32)
+
     // Check if we are in async mode. If not, don't wait for event;
     NV_ENC_CONFIG sEncodeConfig = { 0 };
     NV_ENC_INITIALIZE_PARAMS sInitializeParams = { 0 };
@@ -556,8 +557,10 @@ void NvEncoder::WaitForCompletionEvent(int iEvent)
         NVENC_THROW_ERROR("Failed to encode frame", NV_ENC_ERR_GENERIC);
     }
 #endif
-#endif
 }
+#else
+void NvEncoder::WaitForCompletionEvent(int) {}
+#endif
 
 uint32_t NvEncoder::GetWidthInBytes(const NV_ENC_BUFFER_FORMAT bufferFormat, const uint32_t width)
 {
