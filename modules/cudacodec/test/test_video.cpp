@@ -270,6 +270,7 @@ CUDA_TEST_P(DisplayResolution, Reader)
         cv::Ptr<cv::cudacodec::VideoReader> readerCodedSz = cv::cudacodec::createVideoReader(inputFile, {}, params);
         readerCodedSz->set(cudacodec::ColorFormat::GRAY);
         GpuMat frameCodedSz;
+        ASSERT_TRUE(readerCodedSz->nextFrame(frameCodedSz));
         ASSERT_EQ(cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF), 0);
     }
 }
