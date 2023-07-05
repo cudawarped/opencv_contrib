@@ -151,7 +151,7 @@ CUDA_TEST_P(CheckExtraData, Reader)
 
     cv::cuda::setDevice(GET_PARAM(0).deviceID());
     const string path = get<0>(GET_PARAM(1));
-    const int sz = get<1>(GET_PARAM(1));
+    const size_t sz = get<1>(GET_PARAM(1));
     std::string inputFile = std::string(cvtest::TS::ptr()->get_data_path()) + "../" + path;
     cv::cudacodec::VideoReaderInitParams params;
     params.rawMode = true;
@@ -163,7 +163,7 @@ CUDA_TEST_P(CheckExtraData, Reader)
     cv::Mat extraData;
     const bool newData = reader->retrieve(extraData, static_cast<size_t>(extraDataIdx));
     ASSERT_TRUE((newData && sz) || (!newData && !sz));
-    ASSERT_EQ(extraData.total(), static_cast<size_t>(sz));
+    ASSERT_EQ(extraData.total(), sz);
 }
 
 CUDA_TEST_P(CheckKeyFrame, Reader)
@@ -190,8 +190,7 @@ CUDA_TEST_P(CheckKeyFrame, Reader)
         ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB,N));
         for (int i = static_cast<int>(rawIdxBase); i < static_cast<int>(N + rawIdxBase); i++) {
             nPackages++;
-            double containsKeyFrame = i;
-            ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_LRF_HAS_KEY_FRAME, containsKeyFrame));
+            const bool containsKeyFrame = reader->rawPackageHasKeyFrame(i);
             ASSERT_TRUE((nPackages == 1 && containsKeyFrame) || (nPackages == 2 && !containsKeyFrame)) << "nPackage: " << i;
             if (nPackages >= maxNPackagesToCheck)
                 break;
@@ -271,8 +270,7 @@ CUDA_TEST_P(DisplayResolution, Reader)
         cv::Ptr<cv::cudacodec::VideoReader> readerCodedSz = cv::cudacodec::createVideoReader(inputFile, {}, params);
         readerCodedSz->set(cudacodec::ColorFormat::GRAY);
         GpuMat frameCodedSz;
-        ASSERT_TRUE(readerCodedSz->nextFrame(frameCodedSz));
-        ASSERT_TRUE(cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF) == 0);
+        ASSERT_EQ(cv::cuda::norm(frame, frameCodedSz(displayArea), NORM_INF), 0);
     }
 }
 

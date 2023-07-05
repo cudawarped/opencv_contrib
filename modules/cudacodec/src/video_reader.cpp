@@ -134,6 +134,8 @@ namespace
 
         bool get(const int propertyId, double& propertyVal) const CV_OVERRIDE;
 
+        bool rawPackageHasKeyFrame(const int idx) const CV_OVERRIDE;
+
     private:
         bool internalGrab(GpuMat& frame, Stream& stream);
         void waitForDecoderInit();
@@ -356,15 +358,6 @@ namespace
         case VideoReaderProps::PROP_RAW_MODE:
             propertyVal = videoSource_->RawModeEnabled();
             return true;
-        case VideoReaderProps::PROP_LRF_HAS_KEY_FRAME: {
-            const int iPacket = static_cast<int>(propertyVal) - rawPacketsBaseIdx;
-            if (videoSource_->RawModeEnabled() && iPacket >= 0 && static_cast<size_t>(iPacket) < rawPackets.size()) {
-                propertyVal = rawPackets.at(iPacket).ContainsKeyFrame();
-                return true;
-            }
-            else
-                break;
-        }
         case VideoReaderProps::PROP_ALLOW_FRAME_DROP:
             propertyVal = videoParser_->allowFrameDrops();
             return true;
@@ -378,6 +371,14 @@ namespace
             break;
         }
         return false;
+    }
+
+    bool VideoReaderImpl::rawPackageHasKeyFrame(const int idx) const {
+        const int iPacket = idx - rawPacketsBaseIdx;
+        if (videoSource_->RawModeEnabled() && iPacket >= 0 && static_cast<size_t>(iPacket) < rawPackets.size())
+            return rawPackets.at(iPacket).ContainsKeyFrame();
+        else
+            return false;
     }
 
     bool VideoReaderImpl::getVideoReaderProps(const VideoReaderProps propertyId, double& propertyValOut, double propertyValIn) const {
