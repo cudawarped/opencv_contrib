@@ -336,7 +336,6 @@ struct CV_EXPORTS_W_SIMPLE FormatInfo
 /** @brief cv::cudacodec::VideoReader generic properties identifier.
 */
 enum class VideoReaderProps {
-    PROP_DECODED_FRAME_IDX = 0, //!< Index for retrieving the decoded frame using retrieve().
     PROP_EXTRA_DATA_INDEX = 1, //!< Index for retrieving the extra data associated with a video source using retrieve().
     PROP_RAW_PACKAGES_BASE_INDEX = 2, //!< Base index for retrieving raw encoded data using retrieve().
     PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB = 3, //!< Number of raw packages recieved since the last call to grab().
@@ -379,24 +378,10 @@ public:
     */
     CV_WRAP virtual FormatInfo format() const = 0;
 
-    /** @brief Grabs the next frame from the video source.
-
-    @param stream Stream for the asynchronous version.
-    @return `true` (non-zero) in the case of success.
-
-    The method/function grabs the next frame from video file or camera and returns true (non-zero) in
-    the case of success.
-
-    The primary use of the function is for reading both the encoded and decoded video data when rawMode is enabled.  With rawMode enabled
-    retrieve() can be called following grab() to retrieve all the data associated with the current video source since the last call to grab() or the creation of the VideoReader.
-     */
-    CV_WRAP virtual bool grab(Stream& stream = Stream::Null()) = 0;
-
     /** @brief Returns previously grabbed video data.
 
     @param [out] frame The returned data which depends on the provided idx.
     @param idx Determines the returned data inside image. The returned data can be the:
-     - Decoded frame, idx = get(PROP_DECODED_FRAME_IDX).
      - Extra data if available, idx = get(PROP_EXTRA_DATA_INDEX).
      - Raw encoded data package.  To retrieve package i,  idx = get(PROP_RAW_PACKAGES_BASE_INDEX) + i with i < get(PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB)
     @return `false` if no frames have been grabbed
@@ -404,34 +389,7 @@ public:
     The method returns data associated with the current video source since the last call to grab() or the creation of the VideoReader. If no data is present
     the method returns false and the function returns an empty image.
      */
-    virtual bool retrieve(OutputArray frame, const size_t idx = static_cast<size_t>(VideoReaderProps::PROP_DECODED_FRAME_IDX)) const = 0;
-
-    /** @brief Returns previously grabbed encoded video data.
-
-    @param [out] frame The encoded video data.
-    @param idx Determines the returned data inside image. The returned data can be the:
-     - Extra data if available, idx = get(PROP_EXTRA_DATA_INDEX).
-     - Raw encoded data package.  To retrieve package i,  idx = get(PROP_RAW_PACKAGES_BASE_INDEX) + i with i < get(PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB)
-    @return `false` if no frames have been grabbed
-
-    The method returns data associated with the current video source since the last call to grab() or the creation of the VideoReader. If no data is present
-    the method returns false and the function returns an empty image.
-     */
-    CV_WRAP inline bool retrieve(CV_OUT Mat& frame, const size_t idx) const {
-        return retrieve(OutputArray(frame), idx);
-    }
-
-    /** @brief Returns the next video frame.
-
-    @param [out] frame The video frame.  If grab() has not been called then this will be empty().
-    @return `false` if no frames have been grabbed
-
-    The method returns data associated with the current video source since the last call to grab(). If no data is present
-    the method returns false and the function returns an empty image.
-     */
-    CV_WRAP inline bool retrieve(CV_OUT GpuMat& frame) const {
-        return retrieve(OutputArray(frame));
-    }
+    CV_WRAP virtual bool retrieve(OutputArray frame, const size_t idx) const = 0;
 
     /** @brief Sets a property in the VideoReader.
 

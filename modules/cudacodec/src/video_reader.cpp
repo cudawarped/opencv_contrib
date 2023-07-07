@@ -121,8 +121,6 @@ namespace
 
         FormatInfo format() const CV_OVERRIDE;
 
-        bool grab(Stream& stream) CV_OVERRIDE;
-
         bool retrieve(OutputArray frame, const size_t idx) const CV_OVERRIDE;
 
         bool set(const VideoReaderProps propertyId, const double propertyVal) CV_OVERRIDE;
@@ -136,7 +134,6 @@ namespace
         bool rawPackageHasKeyFrame(const int idx) const CV_OVERRIDE;
 
     private:
-        bool internalGrab(GpuMat& frame, Stream& stream);
         void waitForDecoderInit();
 
         Ptr<VideoSource> videoSource_;
@@ -207,7 +204,7 @@ namespace
         CUvideoctxlock m_lock;
     };
 
-    bool VideoReaderImpl::internalGrab(GpuMat& frame, Stream& stream) {
+    bool VideoReaderImpl::nextFrame(GpuMat& frame, Stream& stream) {
         if (videoParser_->hasError())
             CV_Error(Error::StsError, "Parsing/Decoding video source failed, check GPU memory is available and GPU supports hardware decoding.");
 
@@ -275,17 +272,8 @@ namespace
         return true;
     }
 
-    bool VideoReaderImpl::grab(Stream& stream) {
-        return internalGrab(lastFrame, stream);
-    }
-
     bool VideoReaderImpl::retrieve(OutputArray frame, const size_t idx) const {
-        if (idx == decodedFrameIdx) {
-            if (!frame.isGpuMat())
-                CV_Error(Error::StsUnsupportedFormat, "Decoded frame is stored on the device and must be retrieved using a cv::cuda::GpuMat");
-            frame.getGpuMatRef() = lastFrame;
-        }
-        else if (idx == extraDataIdx) {
+        if (idx == extraDataIdx) {
             if (!frame.isMat())
                 CV_Error(Error::StsUnsupportedFormat, "Extra data  is stored on the host and must be retrieved using a cv::Mat");
             videoSource_->getExtraData(frame.getMatRef());
@@ -338,9 +326,6 @@ namespace
     bool VideoReaderImpl::get(const VideoReaderProps propertyId, double& propertyVal) const {
         switch (propertyId)
         {
-        case VideoReaderProps::PROP_DECODED_FRAME_IDX:
-            propertyVal =  decodedFrameIdx;
-            return true;
         case VideoReaderProps::PROP_EXTRA_DATA_INDEX:
             propertyVal = extraDataIdx;
             return true;
@@ -382,13 +367,6 @@ namespace
 
     bool VideoReaderImpl::get(const int propertyId, double& propertyVal) const {
         return videoSource_->get(propertyId, propertyVal);
-    }
-
-    bool VideoReaderImpl::nextFrame(GpuMat& frame, Stream& stream)
-    {
-        if (!internalGrab(frame, stream))
-            return false;
-        return true;
     }
 }
 

@@ -132,7 +132,8 @@ CUDA_TEST_P(CheckSet, Reader)
     ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_RAW_MODE, rawModeVal));
     ASSERT_TRUE(rawModeVal);
     bool rawPacketsAvailable = false;
-    while (reader->grab()) {
+    GpuMat frame;
+    while (reader->nextFrame(frame)) {
         double nRawPackages = -1;
         ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB, nRawPackages));
         if (nRawPackages > 0) {
@@ -159,7 +160,8 @@ CUDA_TEST_P(CheckExtraData, Reader)
     double extraDataIdx = -1;
     ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_EXTRA_DATA_INDEX, extraDataIdx));
     ASSERT_EQ(extraDataIdx, 1 );
-    ASSERT_TRUE(reader->grab());
+    GpuMat frame;
+    ASSERT_TRUE(reader->nextFrame(frame));
     cv::Mat extraData;
     const bool newData = reader->retrieve(extraData, static_cast<size_t>(extraDataIdx));
     ASSERT_TRUE((newData && sz) || (!newData && !sz));
@@ -184,8 +186,9 @@ CUDA_TEST_P(CheckKeyFrame, Reader)
     ASSERT_EQ(rawIdxBase, 2);
     constexpr int maxNPackagesToCheck = 2;
     int nPackages = 0;
+    GpuMat frame;
     while (nPackages < maxNPackagesToCheck) {
-        ASSERT_TRUE(reader->grab());
+        ASSERT_TRUE(reader->nextFrame(frame));
         double N = -1;
         ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB,N));
         for (int i = static_cast<int>(rawIdxBase); i < static_cast<int>(N + rawIdxBase); i++) {
@@ -438,8 +441,7 @@ CUDA_TEST_P(VideoReadRaw, Reader)
         cv::cuda::GpuMat frame;
         for (int i = 0; i < 100; i++)
         {
-            ASSERT_TRUE(reader->grab());
-            ASSERT_TRUE(reader->retrieve(frame));
+            ASSERT_TRUE(reader->nextFrame(frame));
             ASSERT_FALSE(frame.empty());
             double N = -1;
             ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB,N));
@@ -459,16 +461,12 @@ CUDA_TEST_P(VideoReadRaw, Reader)
         cv::cudacodec::VideoReaderInitParams params;
         params.rawMode = true;
         cv::Ptr<cv::cudacodec::VideoReader> readerActual = cv::cudacodec::createVideoReader(fileNameOut, {}, params);
-        double decodedFrameIdx = -1;
-        ASSERT_TRUE(readerActual->get(cv::cudacodec::VideoReaderProps::PROP_DECODED_FRAME_IDX, decodedFrameIdx));
-        ASSERT_EQ(decodedFrameIdx, 0);
         cv::cuda::GpuMat reference, actual;
         cv::Mat referenceHost, actualHost;
         for (int i = 0; i < 100; i++)
         {
             ASSERT_TRUE(readerReference->nextFrame(reference));
-            ASSERT_TRUE(readerActual->grab());
-            ASSERT_TRUE(readerActual->retrieve(actual, static_cast<size_t>(decodedFrameIdx)));
+            ASSERT_TRUE(readerActual->nextFrame(actual));
             actual.download(actualHost);
             reference.download(referenceHost);
             ASSERT_TRUE(cvtest::norm(actualHost, referenceHost, NORM_INF) == 0);
@@ -544,7 +542,8 @@ CUDA_TEST_P(CheckDecodeSurfaces, Reader)
         cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile, {}, params);
         cv::cudacodec::FormatInfo fmt = reader->format();
         ASSERT_TRUE(fmt.ulNumDecodeSurfaces == ulNumDecodeSurfaces);
-        for (int i = 0; i < 100; i++) ASSERT_TRUE(reader->grab());
+        GpuMat frame;
+        for (int i = 0; i < 100; i++) ASSERT_TRUE(reader->nextFrame(frame));
     }
 
     {
@@ -553,7 +552,8 @@ CUDA_TEST_P(CheckDecodeSurfaces, Reader)
         cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile, {}, params);
         cv::cudacodec::FormatInfo fmt = reader->format();
         ASSERT_TRUE(fmt.ulNumDecodeSurfaces == ulNumDecodeSurfaces + 1);
-        for (int i = 0; i < 100; i++) ASSERT_TRUE(reader->grab());
+        GpuMat frame;
+        for (int i = 0; i < 100; i++) ASSERT_TRUE(reader->nextFrame(frame));
     }
 }
 
