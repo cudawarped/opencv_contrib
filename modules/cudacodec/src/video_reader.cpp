@@ -127,11 +127,11 @@ namespace
 
         bool set(const ColorFormat colorFormat_) CV_OVERRIDE;
 
-        bool get(const VideoReaderProps propertyId, double& propertyVal) const CV_OVERRIDE;
+        bool get(const VideoReaderProps propertyId, size_t& propertyVal) const CV_OVERRIDE;
 
         bool get(const int propertyId, double& propertyVal) const CV_OVERRIDE;
 
-        bool rawPackageHasKeyFrame(const int idx) const CV_OVERRIDE;
+        bool rawPackageHasKeyFrame(const size_t idx) const CV_OVERRIDE;
 
     private:
         void waitForDecoderInit();
@@ -323,7 +323,7 @@ namespace
         return true;
     }
 
-    bool VideoReaderImpl::get(const VideoReaderProps propertyId, double& propertyVal) const {
+    bool VideoReaderImpl::get(const VideoReaderProps propertyId, size_t& propertyVal) const {
         switch (propertyId)
         {
         case VideoReaderProps::PROP_EXTRA_DATA_INDEX:
@@ -337,7 +337,7 @@ namespace
             else
                 break;
         case VideoReaderProps::PROP_NUMBER_OF_RAW_PACKAGES_SINCE_LAST_GRAB:
-            propertyVal = static_cast<double>(rawPackets.size());
+            propertyVal = rawPackets.size();
             return true;
         case VideoReaderProps::PROP_RAW_MODE:
             propertyVal = videoSource_->RawModeEnabled();
@@ -349,7 +349,7 @@ namespace
             propertyVal = videoParser_->udpSource();
             return true;
         case VideoReaderProps::PROP_COLOR_FORMAT:
-            propertyVal = static_cast<double>(colorFormat);
+            propertyVal = static_cast<size_t>(colorFormat);
             return true;
         default:
             break;
@@ -357,9 +357,10 @@ namespace
         return false;
     }
 
-    bool VideoReaderImpl::rawPackageHasKeyFrame(const int idx) const {
-        const int iPacket = idx - rawPacketsBaseIdx;
-        if (videoSource_->RawModeEnabled() && iPacket >= 0 && static_cast<size_t>(iPacket) < rawPackets.size())
+    bool VideoReaderImpl::rawPackageHasKeyFrame(const size_t idx) const {
+        if (idx < rawPacketsBaseIdx) return false;
+        const size_t iPacket = idx - rawPacketsBaseIdx;
+        if (videoSource_->RawModeEnabled() && iPacket < rawPackets.size())
             return rawPackets.at(iPacket).ContainsKeyFrame();
         else
             return false;

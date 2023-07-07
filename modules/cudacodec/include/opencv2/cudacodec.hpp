@@ -419,7 +419,7 @@ public:
      - Out: Value of the property.
     @return `true` unless the property is not supported.
     */
-    CV_WRAP_AS(getVideoReaderProps) virtual bool get(const VideoReaderProps propertyId, CV_OUT double& propertyVal) const = 0;
+    CV_WRAP_AS(getVideoReaderProps) virtual bool get(const VideoReaderProps propertyId, CV_OUT size_t& propertyVal) const = 0;
 
     /** @brief Retrieves the specified property used by the VideoSource.
 
@@ -466,7 +466,7 @@ public:
     ```
     \sa retrieve
     */
-    CV_WRAP virtual bool rawPackageHasKeyFrame(const int idx) const = 0;
+    CV_WRAP virtual bool rawPackageHasKeyFrame(const size_t idx) const = 0;
 };
 
 /** @brief Interface for video demultiplexing. :
