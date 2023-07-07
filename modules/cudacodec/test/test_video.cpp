@@ -437,7 +437,7 @@ CUDA_TEST_P(VideoReadRaw, Reader)
         cv::Ptr<cv::cudacodec::VideoReader> reader = cv::cudacodec::createVideoReader(inputFile, {}, params);
         size_t rawIdxBase = 0;
         ASSERT_TRUE(reader->get(cv::cudacodec::VideoReaderProps::PROP_RAW_PACKAGES_BASE_INDEX, rawIdxBase));
-        ASSERT_EQ(rawIdxBase, 2);
+        ASSERT_EQ(rawIdxBase, static_cast<size_t>(2));
         cv::cuda::GpuMat frame;
         for (int i = 0; i < 100; i++)
         {
