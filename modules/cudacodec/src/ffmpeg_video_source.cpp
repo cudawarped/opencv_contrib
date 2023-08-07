@@ -175,6 +175,7 @@ cv::cudacodec::detail::FFmpegVideoSource::FFmpegVideoSource(const String& fname,
     if (!videoio_registry::hasBackend(CAP_FFMPEG))
         CV_Error(Error::StsNotImplemented, "FFmpeg backend not found");
 
+    tsStart = cv::getTickCount() / cv::getTickFrequency() - 0.5;
     cap.open(fname, CAP_FFMPEG, videoCaptureParams);
     if (!cap.isOpened())
         CV_Error(Error::StsUnsupportedFormat, "Unsupported video source");
@@ -235,6 +236,11 @@ bool cv::cudacodec::detail::FFmpegVideoSource::get(const int propertyId, double&
 
 bool cv::cudacodec::detail::FFmpegVideoSource::getNextPacket(unsigned char** data, size_t* size)
 {
+    double tsNow = cv::getTickCount()/cv::getTickFrequency();
+    while (tsNow - tsStart < (iFrame)*0.04) {
+       Sleep(1);
+       tsNow = cv::getTickCount()/ cv::getTickFrequency();;
+    }
     cap >> rawFrame;
     *data = rawFrame.data;
     *size = rawFrame.total();

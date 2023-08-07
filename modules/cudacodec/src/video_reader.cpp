@@ -230,6 +230,7 @@ namespace
 
                 // Wait a bit
                 Thread::sleep(1);
+                CV_LOG_INFO(NULL, String("Sleep"));
             }
 
             bool isProgressive = displayInfo.progressive_frame != 0;

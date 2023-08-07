@@ -72,6 +72,7 @@ private:
     Mat rawFrame, extraData, dataWithHeader;
     int iFrame = 0;
     std::vector<int> videoCaptureParams;
+    double tsStart = 0;
 };
 
 }}}
