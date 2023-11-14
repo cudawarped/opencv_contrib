@@ -161,6 +161,7 @@ namespace
         GpuMat frames_[2];
         GpuMat pyrLevel_[2], M_, bufM_, R_[2], blurredFrame_[2];
         std::vector<GpuMat> pyramid0_, pyramid1_;
+        Event sourceStreamComplete;
     };
 
     void FarnebackOpticalFlowImpl::calc(InputArray _frame0, InputArray _frame1, InputOutputArray _flow, Stream& stream)
@@ -316,8 +317,10 @@ namespace
         CV_Assert(!fastPyramids_ || std::abs(pyrScale_ - 0.5) < 1e-6);
 
         Stream streams[5];
-        if (stream)
+        if (stream) {
             streams[0] = stream;
+            sourceStreamComplete.record();
+        }
 
         Size size = frame0.size();
         GpuMat prevFlowX, prevFlowY, curFlowX, curFlowY;
@@ -336,6 +339,8 @@ namespace
         }
 
         frame0.convertTo(frames_[0], CV_32F, streams[0]);
+        if (stream)
+            streams[1].waitEvent(sourceStreamComplete);
         frame1.convertTo(frames_[1], CV_32F, streams[1]);
 
         if (fastPyramids_)
