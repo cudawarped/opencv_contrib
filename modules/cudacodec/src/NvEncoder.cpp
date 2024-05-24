@@ -305,9 +305,10 @@ void NvEncoder::MapResources(uint32_t bfrIdx)
     m_vMappedInputBuffers[bfrIdx] = mapInputResource.mappedResource;
 }
 
-void NvEncoder::EncodeFrame(std::vector<std::vector<uint8_t>>& vPacket, NV_ENC_PIC_PARAMS* pPicParams)
+void NvEncoder::EncodeFrame(std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp, NV_ENC_PIC_PARAMS* pPicParams)
 {
     vPacket.clear();
+    outputTimeStamp.clear();
     if (!IsHWEncoderInitialized())
     {
         NVENC_THROW_ERROR("Encoder device not found", NV_ENC_ERR_NO_ENCODE_DEVICE);
@@ -322,7 +323,7 @@ void NvEncoder::EncodeFrame(std::vector<std::vector<uint8_t>>& vPacket, NV_ENC_P
     if (nvStatus == NV_ENC_SUCCESS || nvStatus == NV_ENC_ERR_NEED_MORE_INPUT)
     {
         m_iToSend++;
-        GetEncodedPacket(m_vBitstreamOutputBuffer, vPacket, true);
+        GetEncodedPacket(m_vBitstreamOutputBuffer, vPacket, outputTimeStamp, true);
     }
     else
     {
@@ -353,6 +354,7 @@ NVENCSTATUS NvEncoder::DoEncode(NV_ENC_INPUT_PTR inputBuffer, NV_ENC_OUTPUT_PTR 
     {
         picParams = *pPicParams;
     }
+    picParams.inputTimeStamp = m_iInputFrame++; // pass this in so we don't need to change anything.
     picParams.version = NV_ENC_PIC_PARAMS_VER;
     picParams.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
     picParams.inputBuffer = inputBuffer;
@@ -376,7 +378,7 @@ void NvEncoder::SendEOS()
     NVENC_API_CALL(m_nvenc.nvEncEncodePicture(m_hEncoder, &picParams));
 }
 
-void NvEncoder::EndEncode(std::vector<std::vector<uint8_t>>& vPacket)
+void NvEncoder::EndEncode(std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp)
 {
     vPacket.clear();
     if (!IsHWEncoderInitialized())
@@ -385,11 +387,10 @@ void NvEncoder::EndEncode(std::vector<std::vector<uint8_t>>& vPacket)
     }
 
     SendEOS();
-
-    GetEncodedPacket(m_vBitstreamOutputBuffer, vPacket, false);
+    GetEncodedPacket(m_vBitstreamOutputBuffer, vPacket, outputTimeStamp, false); //fix this
 }
 
-void NvEncoder::GetEncodedPacket(std::vector<NV_ENC_OUTPUT_PTR>& vOutputBuffer, std::vector<std::vector<uint8_t>>& vPacket, bool bOutputDelay)
+void NvEncoder::GetEncodedPacket(std::vector<NV_ENC_OUTPUT_PTR>& vOutputBuffer, std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp, bool bOutputDelay)
 {
     unsigned i = 0;
     int iEnd = bOutputDelay ? m_iToSend - m_nOutputDelay : m_iToSend;
@@ -402,6 +403,7 @@ void NvEncoder::GetEncodedPacket(std::vector<NV_ENC_OUTPUT_PTR>& vOutputBuffer, 
         lockBitstreamData.doNotWait = false;
         NVENC_API_CALL(m_nvenc.nvEncLockBitstream(m_hEncoder, &lockBitstreamData));
 
+        outputTimeStamp.push_back(lockBitstreamData.outputTimeStamp);
         uint8_t* pData = (uint8_t*)lockBitstreamData.bitstreamBufferPtr;
         if (vPacket.size() < i + 1)
         {
@@ -499,7 +501,8 @@ void NvEncoder::FlushEncoder()
     try
     {
         std::vector<std::vector<uint8_t>> vPacket;
-        EndEncode(vPacket);
+        std::vector<uint64_t> outputTimeStamp;
+        EndEncode(vPacket, outputTimeStamp);
     }
     catch (...)
     {

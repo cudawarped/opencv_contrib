@@ -95,17 +95,32 @@ enum Codec
 */
 enum class ColorFormat {
     UNDEFINED = 0,
-    BGRA = 1, //!< OpenCV color format, can be used with both VideoReader and VideoWriter.
-    BGR = 2, //!< OpenCV color format, can be used with both VideoReader and VideoWriter.
-    GRAY = 3, //!< OpenCV color format, can be used with both VideoReader and VideoWriter.
-    NV_NV12 = 4, //!< Nvidia color format - equivalent to YUV - Semi-Planar YUV [Y plane followed by interleaved UV plane], can be used with both VideoReader and VideoWriter.
+    BGRA = 1, //!< OpenCV supported color format (CV_8UC4), can be used with both VideoReader and VideoWriter.
+    BGR = 2, //!< OpenCV supported color format (CV_8UC3), can be used with both VideoReader and VideoWriter.
+    GRAY = 3, //!< OpenCV supported color format (CV_8UC1), can be used with both VideoReader and VideoWriter.
+    NV_NV12 = 4, //!< Nvidia color format (CV_8UC1) - equivalent to YUV - Semi-Planar YUV [Y plane followed by interleaved UV plane], can be used with both VideoReader and VideoWriter.  When used with VideoWriter ensure that the input format uses a reduced color range.
 
-    RGB = 5, //!< OpenCV color format, can only be used with VideoWriter.
-    RGBA = 6, //!< OpenCV color format, can only be used with VideoWriter.
-    NV_YV12 = 8, //!< Nvidia Buffer Format - Planar YUV [Y plane followed by V and U planes], use with VideoReader, can only be used with VideoWriter.
-    NV_IYUV = 9, //!< Nvidia Buffer Format - Planar YUV [Y plane followed by U and V planes], use with VideoReader, can only be used with VideoWriter.
-    NV_YUV444 = 10, //!< Nvidia Buffer Format - Planar YUV [Y plane followed by U and V planes], use with VideoReader, can only be used with VideoWriter.
-    NV_AYUV = 11, //!< Nvidia Buffer Format - 8 bit Packed A8Y8U8V8. This is a word-ordered format where a pixel is represented by a 32-bit word with V in the lowest 8 bits, U in the next 8 bits, Y in the 8 bits after that and A in the highest 8 bits, can only be used with VideoWriter.
+    RGB = 5, //!< OpenCV supported color format (CV_8UC3), can only be used with VideoWriter.
+    RGBA = 6, //!< OpenCV supported color format (CV_8UC4), can only be used with VideoWriter.
+    NV_YV12 = 8, //!< Nvidia Buffer Format (CV_8UC1) - Planar YUV [Y plane followed by V and U planes], can only be used with VideoWriter.
+    NV_IYUV = 9, //!< Nvidia Buffer Format (CV_8UC1) - Planar YUV [Y plane followed by U and V planes], can only be used with VideoWriter.
+    NV_YUV444 = 10, //!< Nvidia Buffer Format (CV_8UC1) - Planar YUV [Y plane followed by U and V planes], can only be used with VideoWriter. Reader?
+    NV_AYUV = 11, //!< Nvidia Buffer Format (CV_32FC1) - 8 bit Packed A8Y8U8V8. This is a word-ordered format where a pixel is represented by a 32-bit word with V in the lowest 8 bits, U in the next 8 bits, Y in the 8 bits after that and A in the highest 8 bits, can only be used with VideoWriter.
+
+    NV_ABGR10 = 12,  /**< 10 bit Packed A2B10G10R10. This is a word-ordered format
+                                                                         where a pixel is represented by a 32-bit word with R
+                                                                         in the lowest 10 bits, G in the next 10 bits, B in the
+                                                                         10 bits after that and A in the highest 2 bits. */
+    NV_ARGB10 = 13,  /**< 10 bit Packed A2R10G10B10. This is a word-ordered format
+                                                                             where a pixel is represented by a 32-bit word with B
+                                                                             in the lowest 10 bits, G in the next 10 bits, R in the
+                                                                             10 bits after that and A in the highest 2 bits. */
+
+
+    NV_YUV420_10BIT = 14, //!< Nvidia Buffer Format (CV_16UC1) - 10 bit Semi-Planar YUV [Y plane followed by interleaved UV plane]. Each pixel of size 2 bytes. Most Significant 10 bits contain pixel data.
+    NV_YUV420_12BIT = 15,
+    NV_YUV444_10BIT = 16, //!< Nvidia Buffer Format (CV_16UC1) - 10 bit Planar YUV444 [Y plane followed by U and V planes]. Each pixel of size 2 bytes. Most Significant 10 bits contain pixel data.
+    NV_YUV444_12BIT = 17,
 #ifndef CV_DOXYGEN
     PROP_NOT_SUPPORTED
 #endif
@@ -184,7 +199,7 @@ struct CV_EXPORTS_W_SIMPLE EncoderParams
 public:
     CV_WRAP EncoderParams() : nvPreset(ENC_PRESET_P3), tuningInfo(ENC_TUNING_INFO_HIGH_QUALITY), encodingProfile(ENC_CODEC_PROFILE_AUTOSELECT),
         rateControlMode(ENC_PARAMS_RC_VBR), multiPassEncoding(ENC_MULTI_PASS_DISABLED), constQp({ 0,0,0 }), averageBitRate(0), maxBitRate(0),
-        targetQuality(30), gopLength(250), idrPeriod(250) {};
+        targetQuality(30), gopLength(250), idrPeriod(250), videoFullRangeFlag(false){};
     CV_PROP_RW EncodePreset nvPreset;
     CV_PROP_RW EncodeTuningInfo tuningInfo;
     CV_PROP_RW EncodeProfile encodingProfile;
@@ -196,6 +211,7 @@ public:
     CV_PROP_RW uint8_t targetQuality; //!< value 0 - 51 where video quality decreases as targetQuality increases, used with \ref ENC_PARAMS_RC_VBR.
     CV_PROP_RW int gopLength; //!< the number of pictures in one GOP, ensuring \ref idrPeriod >= \ref gopLength.
     CV_PROP_RW int idrPeriod; //!< IDR interval, ensuring \ref idrPeriod >= \ref gopLength.
+    CV_PROP_RW bool videoFullRangeFlag;//!< Indicates if the black level, luma and chroma of the source are represented using the full or limited range (AKA TV or "analogue" range) of values as defined in Annex E of the ITU-T Specification.
 };
 CV_EXPORTS bool operator==(const EncoderParams& lhs, const EncoderParams& rhs);
 
@@ -209,7 +225,9 @@ public:
 
     @param vPacket The raw bitstream for one or more frames.
     */
-    virtual void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket) = 0;
+    virtual void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp) = 0;
+
+    virtual bool set(int propId, double value) = 0; // call it VideoWriterPropId
 
     /** @brief Callback function to that the encoding has finished.
     * */
@@ -318,7 +336,8 @@ CV_EXPORTS_W void MapHist(const cuda::GpuMat& hist, CV_OUT Mat& histFull);
 struct CV_EXPORTS_W_SIMPLE FormatInfo
 {
     CV_WRAP FormatInfo() : nBitDepthMinus8(-1), ulWidth(0), ulHeight(0), width(0), height(0), ulMaxWidth(0), ulMaxHeight(0), valid(false),
-        fps(0), ulNumDecodeSurfaces(0), videoFullRangeFlag(false), enableHistogram(false), nCounterBitDepth(0), nMaxHistogramBins(0){};
+        fps(0), ulNumDecodeSurfaces(0), videoFullRangeFlag(false), enableHistogram(false), nCounterBitDepth(0), nMaxHistogramBins(0),
+        output16Bit(false), outputFormat(ColorFormat::BGR){};
 
     CV_PROP_RW Codec codec;
     CV_PROP_RW ChromaFormat chromaFormat;
@@ -342,6 +361,8 @@ struct CV_EXPORTS_W_SIMPLE FormatInfo
     CV_PROP_RW bool enableHistogram;//!< Flag requesting histogram output if supported. Exception will be thrown when requested but not supported.
     CV_PROP_RW int nCounterBitDepth;//!< Bit depth of histogram bins if histogram output is requested and supported.
     CV_PROP_RW int nMaxHistogramBins;//!< Max number of histogram bins if histogram output is requested and supported.
+    CV_PROP_RW bool output16Bit;//!< If this is true and the encoded bit depth is greater than 8 bits, the output will be quantized to 8 bits
+    CV_PROP_RW ColorFormat outputFormat; //
 };
 
 /** @brief cv::cudacodec::VideoReader generic properties identifier.
@@ -570,9 +591,11 @@ but it cannot go below the number determined by NVDEC.
 defaults to the full frame.
 @param enableHistogram Request output of decoded luma histogram \a hist from VideoReader::nextFrame(GpuMat& frame, GpuMat& hist, Stream& stream), if hardware supported.
 @param firstFrameIdx Index of the first frame to seek to on initialization of the VideoReader.
+@param output16Bit Decoded ouput will be 16 bit CV_16UCX where the LSB are zero. i.e. For a 10 bit source the 6LSB will be zero.
 */
 struct CV_EXPORTS_W_SIMPLE VideoReaderInitParams {
-    CV_WRAP VideoReaderInitParams() : udpSource(false), allowFrameDrop(false), minNumDecodeSurfaces(0), rawMode(0), enableHistogram(false), firstFrameIdx(0){};
+    CV_WRAP VideoReaderInitParams() : udpSource(false), allowFrameDrop(false), minNumDecodeSurfaces(0), rawMode(0), enableHistogram(false), firstFrameIdx(0),
+        output16Bit(false){};
     CV_PROP_RW bool udpSource;
     CV_PROP_RW bool allowFrameDrop;
     CV_PROP_RW int minNumDecodeSurfaces;
@@ -582,6 +605,10 @@ struct CV_EXPORTS_W_SIMPLE VideoReaderInitParams {
     CV_PROP_RW cv::Rect targetRoi;
     CV_PROP_RW bool enableHistogram;
     CV_PROP_RW int firstFrameIdx;
+    CV_PROP_RW bool output16Bit;//!< When true the output is always quantized to 8 bits CV_8UCX.  When false the output will be CV_16UC1 with available outputs ... and grey and a default output format of .....
+
+
+    //If this is true and the encoded bit depth is greater than 8 bits, the output will be quantized to 8 bits
 };
 
 /** @brief Creates video reader.
