@@ -41,6 +41,7 @@
 //M*/
 
 #include "precomp.hpp"
+#include "ColorSpace.h"
 
 using namespace cv;
 using namespace cv::cuda;
@@ -55,16 +56,20 @@ void cv::cudacodec::MapHist(const GpuMat&, Mat&) { throw_no_cuda(); }
 #else // HAVE_NVCUVID
 
 void nv12ToBgra(const GpuMat& decodedFrame, GpuMat& outFrame, int width, int height, const bool videoFullRangeFlag, cudaStream_t stream);
+template <class COLOR32>
+void Nv12ToColor32(uint8_t* dpNv12, int nNv12Pitch, uint8_t* dpBgra, int nBgraPitch, int nWidth, int nHeight, int iMatrix = 0);
 bool ValidColorFormat(const ColorFormat colorFormat);
 
-void cvtFromNv12(const GpuMat& decodedFrame, GpuMat& outFrame, int width, int height, const ColorFormat colorFormat, const bool videoFullRangeFlag,
+
+//rename cvtToOuputFmt or cvtColorFormat
+void cvtColorFormat(const GpuMat& decodedFrame, GpuMat& outFrame, int width, int height, const ColorFormat newColorFormat, const ColorFormat decodedSurfaceFormat, const bool videoFullRangeFlag,
     Stream stream)
 {
-    CV_Assert(decodedFrame.cols == width && decodedFrame.rows == height * 1.5f);
-    if (colorFormat == ColorFormat::BGRA) {
+    //CV_Assert(decodedFrame.cols == width && decodedFrame.rows == height * 1.5f); // reundant with 4:4:4
+    if (newColorFormat == ColorFormat::BGRA) {
         nv12ToBgra(decodedFrame, outFrame, width, height, videoFullRangeFlag, StreamAccessor::getStream(stream));
     }
-    else if (colorFormat == ColorFormat::BGR) {
+    else if (newColorFormat == ColorFormat::BGR) {
         outFrame.create(height, width, CV_8UC3);
         Npp8u* pSrc[2] = { decodedFrame.data, &decodedFrame.data[decodedFrame.step * height] };
         NppiSize oSizeROI = { width,height };
@@ -90,16 +95,43 @@ void cvtFromNv12(const GpuMat& decodedFrame, GpuMat& outFrame, int width, int he
         }
 #endif
     }
-    else if (colorFormat == ColorFormat::GRAY) {
-        outFrame.create(height, width, CV_8UC1);
+    else if (newColorFormat == ColorFormat::GRAY) {
+        //if(decodedSurfaceFormat == ColorFormat::NV_NV12)
+        const int type = decodedSurfaceFormat == ColorFormat::NV_NV12 ? CV_8U : CV_16U;
+        const int nBytes = decodedSurfaceFormat == ColorFormat::NV_NV12 ? 1 : 2;
+        //const int n
+        //int smallestLumaVal =
+        if (nBytes == 2) {
+            //int nLsb = 6;
+            //int
+            //if(decodedSurfaceFormat == ColorFormat::NV_YUV420_10BIT || decodedSurfaceFormat == ColorFormat::NV_YUV444_10BIT)
+
+
+
+            const int nLsb = decodedSurfaceFormat == ColorFormat::NV_YUV420_10BIT || decodedSurfaceFormat == ColorFormat::NV_YUV444_10BIT ? 6 : 4;
+            cuda::rshift(decodedFrame(Rect(0, 0, width, height)), Scalar(nLsb), decodedFrame(Rect(0, 0, width, height)), stream);
+        }
+
+        //if(output16Bit) // need to bitshift
+        //if(output16Bit)
+        //    rshift()
+
+        outFrame.create(height, width, type);
         if(videoFullRangeFlag)
-            cudaSafeCall(cudaMemcpy2DAsync(outFrame.ptr(), outFrame.step, decodedFrame.ptr(), decodedFrame.step, width, height, cudaMemcpyDeviceToDevice, StreamAccessor::getStream(stream)));
+            cudaSafeCall(cudaMemcpy2DAsync(outFrame.ptr(), outFrame.step, decodedFrame.ptr(), decodedFrame.step, width * nBytes, height, cudaMemcpyDeviceToDevice, StreamAccessor::getStream(stream)));
         else {
-            cv::cuda::subtract(decodedFrame(Rect(0,0,width,height)), 16, outFrame, noArray(), CV_8U, stream);
-            cv::cuda::multiply(outFrame, 255.0f / 219.0f, outFrame, 1.0, CV_8U, stream);
+            int smallestLumaVal = 16;
+            if (nBytes == 2) {
+                if (decodedSurfaceFormat == ColorFormat::NV_YUV420_10BIT || decodedSurfaceFormat == ColorFormat::NV_YUV444_10BIT)
+                    smallestLumaVal *= 4;
+                else
+                    smallestLumaVal *= 6;
+            }
+            cv::cuda::subtract(decodedFrame(Rect(0,0,width,height)), smallestLumaVal, outFrame, noArray(), type, stream);
+            cv::cuda::multiply(outFrame, 255.0f / 219.0f, outFrame, 1.0, type, stream);
         }
     }
-    else if (colorFormat == ColorFormat::NV_NV12) {
+    else {
         decodedFrame.copyTo(outFrame, stream);
     }
 }
@@ -112,7 +144,7 @@ namespace
     {
     public:
         explicit VideoReaderImpl(const Ptr<VideoSource>& source, const int minNumDecodeSurfaces, const bool allowFrameDrop = false , const bool udpSource = false,
-            const Size targetSz = Size(), const Rect srcRoi = Rect(), const Rect targetRoi = Rect(), const bool enableHistogram = false, const int firstFrameIdx = 0);
+            const Size targetSz = Size(), const Rect srcRoi = Rect(), const Rect targetRoi = Rect(), const bool enableHistogram = false, const int firstFrameIdx = 0, const bool output16Bit = false);
         ~VideoReaderImpl();
 
         bool nextFrame(GpuMat& frame, Stream& stream) CV_OVERRIDE;
@@ -177,7 +209,7 @@ namespace
     }
 
     VideoReaderImpl::VideoReaderImpl(const Ptr<VideoSource>& source, const int minNumDecodeSurfaces, const bool allowFrameDrop, const bool udpSource,
-        const Size targetSz, const Rect srcRoi, const Rect targetRoi, const bool enableHistogram, const int firstFrameIdx) :
+        const Size targetSz, const Rect srcRoi, const Rect targetRoi, const bool enableHistogram, const int firstFrameIdx, const bool output16Bit) :
         videoSource_(source),
         lock_(0)
     {
@@ -189,14 +221,25 @@ namespace
         cuSafeCall( cuCtxGetCurrent(&ctx) );
         cuSafeCall( cuvidCtxLockCreate(&lock_, ctx) );
         frameQueue_.reset(new FrameQueue());
-        videoDecoder_.reset(new VideoDecoder(videoSource_->format().codec, minNumDecodeSurfaces, targetSz, srcRoi, targetRoi, enableHistogram, ctx, lock_));
+        videoDecoder_.reset(new VideoDecoder(videoSource_->format().codec, minNumDecodeSurfaces, targetSz, srcRoi, targetRoi, enableHistogram, output16Bit, ctx, lock_));
         videoParser_.reset(new VideoParser(videoDecoder_, frameQueue_, allowFrameDrop, udpSource));
         videoSource_->setVideoParser(videoParser_);
         videoSource_->start();
         waitForDecoderInit();
         for(iFrame = videoSource_->getFirstFrameIdx(); iFrame < firstFrameIdx; iFrame++)
             CV_Assert(skipFrame());
-        videoSource_->updateFormat(videoDecoder_->format());
+        FormatInfo fmt = videoDecoder_->format();
+        videoSource_->updateFormat(fmt);
+        ColorFormat ouputFormat = fmt.outputFormat;
+        if (ouputFormat != ColorFormat::NV_NV12 && colorFormat != ColorFormat::GRAY) // can we get gray?
+            colorFormat = videoDecoder_->format().outputFormat;
+
+        //if(videoDecoder_->format().outputFormat
+        //if (output16Bit) // colorFormat should be determined by the format inside decoder, just set an extra field, decoded color Format.
+        //    colorFormat = ColorFormat::NV_YUV420_10BIT;
+        // could be output16Bit
+        // if bitdepth greater than ... format force to .....
+        //if(videoDecoder_->format(). > 0
     }
 
     VideoReaderImpl::~VideoReaderImpl()
@@ -290,7 +333,7 @@ namespace
             // map decoded video frame to CUDA surface
             GpuMat decodedFrame = videoDecoder_->mapFrame(frameInfo.first.picture_index, frameInfo.second);
 
-            cvtFromNv12(decodedFrame, frame, videoDecoder_->targetWidth(), videoDecoder_->targetHeight(), colorFormat, videoDecoder_->format().videoFullRangeFlag, stream);
+            cvtColorFormat(decodedFrame, frame, videoDecoder_->targetWidth(), videoDecoder_->targetHeight(), colorFormat, videoDecoder_->format().outputFormat, videoDecoder_->format().videoFullRangeFlag, stream);
 
             if (fmt.enableHistogram) {
                 const size_t histogramSz = 4 * fmt.nMaxHistogramBins;
@@ -465,14 +508,14 @@ Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename, const 
         videoSource.reset(new CuvidVideoSource(filename));
     }
     return makePtr<VideoReaderImpl>(videoSource, params.minNumDecodeSurfaces, params.allowFrameDrop, params.udpSource, params.targetSz,
-        params.srcRoi, params.targetRoi, params.enableHistogram, params.firstFrameIdx);
+        params.srcRoi, params.targetRoi, params.enableHistogram, params.firstFrameIdx, params.output16Bit);
 }
 
 Ptr<VideoReader> cv::cudacodec::createVideoReader(const Ptr<RawVideoSource>& source, const VideoReaderInitParams params)
 {
     Ptr<VideoSource> videoSource(new RawVideoSourceWrapper(source, params.rawMode));
     return makePtr<VideoReaderImpl>(videoSource, params.minNumDecodeSurfaces, params.allowFrameDrop, params.udpSource, params.targetSz,
-        params.srcRoi, params.targetRoi, params.enableHistogram, params.firstFrameIdx);
+        params.srcRoi, params.targetRoi, params.enableHistogram, params.firstFrameIdx, params.output16Bit);
 }
 
 void cv::cudacodec::MapHist(const GpuMat& hist, Mat& histFull) {

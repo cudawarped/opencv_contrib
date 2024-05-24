@@ -72,8 +72,9 @@ class FFmpegVideoWriter : public EncoderCallback
 public:
     FFmpegVideoWriter(const String& fileName, const Codec codec, const int fps, const Size sz, const int idrPeriod);
     ~FFmpegVideoWriter();
-    void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket);
+    void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp);
     void onEncodingFinished();
+    bool set(int propId, double value);
 private:
     cv::VideoWriter writer;
 };
@@ -81,7 +82,7 @@ private:
 FFmpegVideoWriter::FFmpegVideoWriter(const String& fileName, const Codec codec, const int fps, const Size sz, const int idrPeriod) {
     if (!videoio_registry::hasBackend(CAP_FFMPEG))
         CV_Error(Error::StsNotImplemented, "FFmpeg backend not found");
-    const int fourcc = codec == Codec::H264 ? cv::VideoWriter::fourcc('a', 'v', 'c', '1') : cv::VideoWriter::fourcc('h', 'e', 'v', '1');
+    const int fourcc = codec == Codec::H264 ? cv::VideoWriter::fourcc('a', 'v', 'c', '1') : cv::VideoWriter::fourcc('h', 'v', 'c', '1');
     writer.open(fileName, fourcc, fps, sz, { VideoWriterProperties::VIDEOWRITER_PROP_RAW_VIDEO, 1, VideoWriterProperties::VIDEOWRITER_PROP_KEY_INTERVAL, idrPeriod });
     if (!writer.isOpened())
         CV_Error(Error::StsUnsupportedFormat, "Unsupported video sink");
@@ -95,21 +96,29 @@ FFmpegVideoWriter::~FFmpegVideoWriter() {
     onEncodingFinished();
 }
 
-void FFmpegVideoWriter::onEncoded(const std::vector<std::vector<uint8_t>>& vPacket) {
-    for (auto& packet : vPacket) {
+void FFmpegVideoWriter::onEncoded(const std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp) {
+    //writer.set(VIDEOWRITER_PROP_B_FRAME_DTS_DELAY, bFrame)
+    CV_Assert(vPacket.size() == outputTimeStamp.size());
+    for (int i = 0; i < vPacket.size(); i++){
+        std::vector<uint8_t> packet = vPacket.at(i);
         Mat wrappedPacket(1, packet.size(), CV_8UC1, (void*)packet.data());
+        writer.set(VIDEOWRITER_PROP_PTS_INDEX, outputTimeStamp.at(i));
         writer.write(wrappedPacket);
     }
 }
 
+bool FFmpegVideoWriter::set(int propId, double value) {
+    return writer.set(propId, value);
+}
 
 class RawVideoWriter : public EncoderCallback
 {
 public:
     RawVideoWriter(const String fileName);
     ~RawVideoWriter();
-    void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket);
+    void onEncoded(const std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp);
     void onEncodingFinished();
+    bool set(int propId, double value) { return false;}
 private:
     std::ofstream fpOut;
 };
@@ -128,7 +137,7 @@ RawVideoWriter::~RawVideoWriter() {
     onEncodingFinished();
 }
 
-void RawVideoWriter::onEncoded(const std::vector<std::vector<uint8_t>>& vPacket) {
+void RawVideoWriter::onEncoded(const std::vector<std::vector<uint8_t>>& vPacket, std::vector<uint64_t>& outputTimeStamp) {
     for (auto& packet : vPacket)
         fpOut.write(reinterpret_cast<const char*>(packet.data()), packet.size());
 }
@@ -158,6 +167,7 @@ private:
     std::vector<std::vector<uint8_t>> vPacket;
     int nSrcChannels = 0;
     CUcontext cuContext;
+    int bFrameDtsDelay = 0;
 };
 
 NV_ENC_BUFFER_FORMAT EncBufferFormat(const ColorFormat colorFormat) {
@@ -172,6 +182,10 @@ NV_ENC_BUFFER_FORMAT EncBufferFormat(const ColorFormat colorFormat) {
     case ColorFormat::NV_IYUV: return NV_ENC_BUFFER_FORMAT_IYUV;
     case ColorFormat::NV_YUV444: return NV_ENC_BUFFER_FORMAT_YUV444;
     case ColorFormat::NV_AYUV: return NV_ENC_BUFFER_FORMAT_AYUV;
+    case ColorFormat::NV_ABGR10: return NV_ENC_BUFFER_FORMAT_ABGR10;
+    case ColorFormat::NV_ARGB10: return NV_ENC_BUFFER_FORMAT_ARGB10;
+    case ColorFormat::NV_YUV420_10BIT: return  NV_ENC_BUFFER_FORMAT_YUV420_10BIT;
+    case ColorFormat::NV_YUV444_10BIT: return  NV_ENC_BUFFER_FORMAT_YUV444_10BIT;
     default: return NV_ENC_BUFFER_FORMAT_UNDEFINED;
     }
 }
@@ -179,15 +193,19 @@ NV_ENC_BUFFER_FORMAT EncBufferFormat(const ColorFormat colorFormat) {
 int NChannels(const ColorFormat colorFormat) {
     switch (colorFormat) {
     case ColorFormat::BGR:
-    case ColorFormat::RGB:
-    case ColorFormat::NV_IYUV:
-    case ColorFormat::NV_YUV444: return 3;
+    case ColorFormat::RGB: return 3;
     case ColorFormat::RGBA:
     case ColorFormat::BGRA:
+    case ColorFormat::NV_ABGR10:
+    case ColorFormat::NV_ARGB10:
     case ColorFormat::NV_AYUV: return 4;
     case ColorFormat::GRAY:
     case ColorFormat::NV_NV12:
-    case ColorFormat::NV_YV12: return 1;
+    case ColorFormat::NV_YV12:
+    case ColorFormat::NV_IYUV:
+    case ColorFormat::NV_YUV444:
+    case ColorFormat::NV_YUV420_10BIT:
+    case ColorFormat::NV_YUV444_10BIT: return 1;
     default: return 0;
     }
 }
@@ -208,8 +226,9 @@ VideoWriterImpl::VideoWriterImpl(const Ptr<EncoderCallback>& encoderCallBack_, c
 }
 
 void VideoWriterImpl::release() {
-    pEnc->EndEncode(vPacket);
-    encoderCallback->onEncoded(vPacket);
+    std::vector<uint64_t> outputTimeStamp;
+    pEnc->EndEncode(vPacket, outputTimeStamp);
+    encoderCallback->onEncoded(vPacket, outputTimeStamp);
     encoderCallback->onEncodingFinished();
 }
 
@@ -316,10 +335,27 @@ void VideoWriterImpl::InitializeEncoder(const GUID codec, const double fps)
     initializeParams.encodeConfig->rcParams.maxBitRate = encoderParams.maxBitRate;
     initializeParams.encodeConfig->rcParams.targetQuality = encoderParams.targetQuality;
     initializeParams.encodeConfig->gopLength = encoderParams.gopLength;
-    if (codec == NV_ENC_CODEC_H264_GUID)
+    if (initializeParams.encodeConfig->frameIntervalP > 1)
+        bFrameDtsDelay = initializeParams.encodeConfig->frameIntervalP - 1;
+    encoderCallback->set(VIDEOWRITER_PROP_B_FRAME_DTS_DELAY, static_cast<double>(bFrameDtsDelay));
+    //initializeParams.encodeConfig->frameIntervalP = 3;
+
+    //m_encodeConfig.frameIntervalP
+    if (codec == NV_ENC_CODEC_H264_GUID) {
         initializeParams.encodeConfig->encodeCodecConfig.h264Config.idrPeriod = encoderParams.idrPeriod;
-    else if (codec == NV_ENC_CODEC_HEVC_GUID)
+        if (encoderParams.videoFullRangeFlag) {
+            initializeParams.encodeConfig->encodeCodecConfig.h264Config.h264VUIParameters.videoSignalTypePresentFlag = true;
+            initializeParams.encodeConfig->encodeCodecConfig.h264Config.h264VUIParameters.videoFullRangeFlag = true;
+            //initializeParams.encodeConfig->encodeCodecConfig.h264Config.h264VUIParameters.videoFormat = (NV_ENC_VUI_VIDEO_FORMAT)1;
+        }
+    }
+    else if (codec == NV_ENC_CODEC_HEVC_GUID) {
         initializeParams.encodeConfig->encodeCodecConfig.hevcConfig.idrPeriod = encoderParams.idrPeriod;
+        if (encoderParams.videoFullRangeFlag) {
+            initializeParams.encodeConfig->encodeCodecConfig.hevcConfig.hevcVUIParameters.videoSignalTypePresentFlag = true;
+            initializeParams.encodeConfig->encodeCodecConfig.hevcConfig.hevcVUIParameters.videoFullRangeFlag = true;
+        }
+    }
     pEnc->CreateEncoder(&initializeParams);
 }
 
@@ -363,6 +399,7 @@ void VideoWriterImpl::CopyToNvSurface(const InputArray src)
         if (stream) {
             cudaMemcpy2DAsync(dst, encoderInputFrame->pitch, srcPtr, srcPitch, pEnc->GetEncodeWidth(), pEnc->GetEncodeHeight(), memcpyKind,
                 cuda::StreamAccessor::getStream(stream));
+            // need to adjust the range here to limited as not an output param
             cudaMemset2DAsync(&dst[encoderInputFrame->pitch * pEnc->GetEncodeHeight()], encoderInputFrame->pitch, 128, pEnc->GetEncodeWidth(), chromaHeight,
                 cuda::StreamAccessor::getStream(stream));
         }
@@ -383,8 +420,9 @@ void VideoWriterImpl::CopyToNvSurface(const InputArray src)
 void VideoWriterImpl::write(const InputArray frame) {
     CV_Assert(frame.channels() == nSrcChannels);
     CopyToNvSurface(frame);
-    pEnc->EncodeFrame(vPacket);
-    encoderCallback->onEncoded(vPacket);
+    std::vector<uint64_t> outputTimeStamp;
+    pEnc->EncodeFrame(vPacket, outputTimeStamp);
+    encoderCallback->onEncoded(vPacket, outputTimeStamp);
 };
 
 EncoderParams VideoWriterImpl::getEncoderParams() const {
@@ -407,7 +445,7 @@ Ptr<VideoWriter> createVideoWriter(const String& fileName, const Size frameSize,
         }
         catch (...)
         {
-            encoderCallback = new RawVideoWriter(fileName);
+            encoderCallback = new RawVideoWriter(fileName); // there should be an option to call this if needed or not?
         }
     }
     return makePtr<VideoWriterImpl>(encoderCallback, frameSize, codec, fps, colorFormat, params, stream);

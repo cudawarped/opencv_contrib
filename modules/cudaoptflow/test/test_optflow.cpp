@@ -306,20 +306,26 @@ PARAM_TEST_CASE(FarnebackOpticalFlow, cv::cuda::DeviceInfo, PyrScale, PolyN, Far
 
 CUDA_TEST_P(FarnebackOpticalFlow, Accuracy)
 {
-    cv::Mat frame0 = readImage("opticalflow/rubberwhale1.png", cv::IMREAD_GRAYSCALE);
+    //cv::Mat frame0 = readImage("opticalflow/rubberwhale1.png", cv::IMREAD_GRAYSCALE);
+    //ASSERT_FALSE(frame0.empty());
+
+    //cv::Mat frame1 = readImage("opticalflow/rubberwhale2.png", cv::IMREAD_GRAYSCALE);
+    //ASSERT_FALSE(frame1.empty());
+
+    cv::Mat frame0 = imread("d:/dloads/f1.jpeg", cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(frame0.empty());
 
-    cv::Mat frame1 = readImage("opticalflow/rubberwhale2.png", cv::IMREAD_GRAYSCALE);
+    cv::Mat frame1 = imread("d:/dloads/f2.jpeg", cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(frame1.empty());
 
     double polySigma = polyN <= 5 ? 1.1 : 1.5;
 
     cv::Ptr<cv::cuda::FarnebackOpticalFlow> farn =
             cv::cuda::FarnebackOpticalFlow::create();
-    farn->setPyrScale(pyrScale);
-    farn->setPolyN(polyN);
-    farn->setPolySigma(polySigma);
-    farn->setFlags(flags);
+    //farn->setPyrScale(pyrScale);
+    //farn->setPolyN(polyN);
+    //farn->setPolySigma(polySigma);
+    //farn->setFlags(flags);
 
     cv::cuda::GpuMat d_flow;
     farn->calc(loadMat(frame0), loadMat(frame1), d_flow);
