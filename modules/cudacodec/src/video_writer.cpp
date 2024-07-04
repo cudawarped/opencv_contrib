@@ -337,7 +337,7 @@ void VideoWriterImpl::InitializeEncoder(const GUID codec, const double fps)
     initializeParams.encodeConfig->gopLength = encoderParams.gopLength;
     if (initializeParams.encodeConfig->frameIntervalP > 1)
         bFrameDtsDelay = initializeParams.encodeConfig->frameIntervalP - 1;
-    encoderCallback->set(VIDEOWRITER_PROP_B_FRAME_DTS_DELAY, static_cast<double>(bFrameDtsDelay));
+    encoderCallback->set(VIDEOWRITER_PROP_B_FRAME_PRESENTATION_DELAY, static_cast<double>(bFrameDtsDelay));
     //initializeParams.encodeConfig->frameIntervalP = 3;
 
     //m_encodeConfig.frameIntervalP
