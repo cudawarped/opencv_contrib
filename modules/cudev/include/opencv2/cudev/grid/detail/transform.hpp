@@ -155,45 +155,67 @@ namespace grid_transform_detail
 
     // transformSimple
 
-    template <class SrcPtr, typename DstType, class UnOp, class MaskPtr>
+    template <class SrcPtr, typename DstType, class UnOp, class MaskPtr, int Y_COARSE = 1>
     __global__ void transformSimple(const SrcPtr src, GlobPtr<DstType> dst, const UnOp op, const MaskPtr mask, const int rows, const int cols)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+        const int base_y = blockIdx.y * blockDim.y * Y_COARSE + threadIdx.y;
 
-        if (x >= cols || y >= rows || !mask(y, x))
-            return;
+        if (x >= cols) return;
 
-        dst(y, x) = saturate_cast<DstType>(op(src(y, x)));
+#pragma unroll
+        for (int y_offset = 0; y_offset < Y_COARSE; ++y_offset)
+        {
+            const int y = base_y + y_offset * blockDim.y;
+            if (y >= rows) return;
+
+            if (mask(y, x))
+                dst(y, x) = saturate_cast<DstType>(op(src(y, x)));
+        }
     }
 
-    template <class SrcPtr1, class SrcPtr2, typename DstType, class BinOp, class MaskPtr>
+    template <class SrcPtr1, class SrcPtr2, typename DstType, class BinOp, class MaskPtr, int Y_COARSE = 1>
     __global__ void transformSimple(const SrcPtr1 src1, const SrcPtr2 src2, GlobPtr<DstType> dst, const BinOp op, const MaskPtr mask, const int rows, const int cols)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+        const int base_y = blockIdx.y * blockDim.y * Y_COARSE + threadIdx.y;
 
-        if (x >= cols || y >= rows || !mask(y, x))
-            return;
+        if (x >= cols) return;
 
-        dst(y, x) = saturate_cast<DstType>(op(src1(y, x), src2(y, x)));
+#pragma unroll
+        for (int y_offset = 0; y_offset < Y_COARSE; ++y_offset)
+        {
+            const int y = base_y + y_offset * blockDim.y;
+            if (y >= rows) return;
+
+            if (mask(y, x))
+                dst(y, x) = saturate_cast<DstType>(op(src1(y, x), src2(y, x)));
+        }
     }
 
     // transformSimple, 2 outputs
     // The overloads are added for polar_cart.cu to compute magnitude and phase with single call
     // the previous implementation with touple causes cuda namespace clash. See https://github.com/opencv/opencv_contrib/issues/3690
-    template <class SrcPtr1, class SrcPtr2, typename DstType1, typename DstType2, class BinOp1, class BinOp2, class MaskPtr>
+    template <class SrcPtr1, class SrcPtr2, typename DstType1, typename DstType2, class BinOp1, class BinOp2, class MaskPtr, int Y_COARSE = 1>
     __global__ void transformSimple(const SrcPtr1 src1, const SrcPtr2 src2, GlobPtr<DstType1> dst1, GlobPtr<DstType2> dst2,
                                     const BinOp1 op1, const BinOp2 op2, const MaskPtr mask, const int rows, const int cols)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+        const int base_y = blockIdx.y * blockDim.y * Y_COARSE + threadIdx.y;
 
-        if (x >= cols || y >= rows || !mask(y, x))
-            return;
+        if (x >= cols) return;
 
-        dst1(y, x) = saturate_cast<DstType1>(op1(src1(y, x), src2(y, x)));
-        dst2(y, x) = saturate_cast<DstType2>(op2(src1(y, x), src2(y, x)));
+#pragma unroll
+        for (int y_offset = 0; y_offset < Y_COARSE; ++y_offset)
+        {
+            const int y = base_y + y_offset * blockDim.y;
+            if (y >= rows) return;
+
+            if (mask(y, x)) {
+                dst1(y, x) = saturate_cast<DstType1>(op1(src1(y, x), src2(y, x)));
+                dst2(y, x) = saturate_cast<DstType2>(op2(src1(y, x), src2(y, x)));
+            }
+        }
     }
 
     // transformSmart
@@ -321,9 +343,16 @@ namespace grid_transform_detail
         __host__ static void call(const SrcPtr& src, const GlobPtr<DstType>& dst, const UnOp& op, const MaskPtr& mask, int rows, int cols, cudaStream_t stream)
         {
             const dim3 block(Policy::block_size_x, Policy::block_size_y);
-            const dim3 grid(divUp(cols, block.x), divUp(rows, block.y));
 
-            transformSimple<<<grid, block, 0, stream>>>(src, dst, op, mask, rows, cols);
+            if (divUp(rows, Policy::block_size_y) <= 65535) {
+                const dim3 grid(divUp(cols, block.x), divUp(rows, block.y));
+                transformSimple << <grid, block, 0, stream >> > (src, dst, op, mask, rows, cols);
+            }
+            else {
+                constexpr int coarse_y = 64;
+                const dim3 grid(divUp(cols, block.x), divUp(rows, block.y * coarse_y));
+                transformSimple<SrcPtr,DstType,UnOp,MaskPtr,coarse_y> << <grid, block, 0, stream >> > (src, dst, op, mask, rows, cols);
+            }
             CV_CUDEV_SAFE_CALL( cudaGetLastError() );
 
             if (stream == 0)

@@ -55,7 +55,7 @@ namespace cv { namespace cudev {
 
 namespace transpose_detail
 {
-    template <int TILE_DIM, int BLOCK_DIM_Y, class SrcPtr, typename DstType>
+    template <int TILE_DIM, int BLOCK_DIM_Y, class SrcPtr, typename DstType, int Y_COARSE = 1>
     __global__ void transpose(const SrcPtr src, GlobPtr<DstType> dst, const int rows, const int cols)
     {
         typedef typename PtrTraits<SrcPtr>::value_type src_type;
@@ -77,34 +77,37 @@ namespace transpose_detail
             blockIdx_x = ((bid / gridDim.y) + blockIdx_y) % gridDim.x;
         }
 
-        int xIndex = blockIdx_x * TILE_DIM + threadIdx.x;
-        int yIndex = blockIdx_y * TILE_DIM + threadIdx.y;
-
-        if (xIndex < cols)
+        const int baseYIndex = blockIdx_y * TILE_DIM * Y_COARSE + threadIdx.y;
+#pragma unroll
+        for (int yCoarse = 0; yCoarse < Y_COARSE; ++yCoarse)
         {
-            for (int i = 0; i < TILE_DIM; i += BLOCK_DIM_Y)
+
+            int xIndex = blockIdx_x * TILE_DIM + threadIdx.x;
+            int yIndex = baseYIndex + yCoarse * BLOCK_DIM_Y;
+
+            if (xIndex < cols)
             {
-                if (yIndex + i < rows)
+                for (int i = 0; i < TILE_DIM; i += BLOCK_DIM_Y)
                 {
-                    tile[threadIdx.y + i][threadIdx.x] = src(yIndex + i, xIndex);
+                    if (yIndex + i < rows)
+                        tile[threadIdx.y + i][threadIdx.x] = src(yIndex + i, xIndex);
                 }
             }
-        }
 
-        __syncthreads();
+            __syncthreads();
 
-        xIndex = blockIdx_y * TILE_DIM + threadIdx.x;
-        yIndex = blockIdx_x * TILE_DIM + threadIdx.y;
+            xIndex = blockIdx_y * TILE_DIM * Y_COARSE + threadIdx.x;
+            yIndex = blockIdx_x * TILE_DIM + threadIdx.y;
 
-        if (xIndex < rows)
-        {
-            for (int i = 0; i < TILE_DIM; i += BLOCK_DIM_Y)
+            if (xIndex < rows)
             {
-                if (yIndex + i < cols)
+                for (int i = 0; i < TILE_DIM; i += BLOCK_DIM_Y)
                 {
-                    dst(yIndex + i, xIndex) = saturate_cast<DstType>(tile[threadIdx.x][threadIdx.y + i]);
+                    if (yIndex + i < cols)
+                        dst(yIndex + i, xIndex + yCoarse * TILE_DIM) = saturate_cast<DstType>(tile[threadIdx.x][threadIdx.y + i]);
                 }
             }
+            __syncthreads();
         }
     }
 
@@ -112,9 +115,17 @@ namespace transpose_detail
     __host__ void transpose(const SrcPtr& src, const GlobPtr<DstType>& dst, int rows, int cols, cudaStream_t stream)
     {
         const dim3 block(Policy::tile_dim, Policy::block_dim_y);
-        const dim3 grid(divUp(cols, block.x), divUp(rows, block.y));
 
-        transpose<Policy::tile_dim, Policy::block_dim_y><<<grid, block, 0, stream>>>(src, dst, rows, cols);
+        if (divUp(rows,Policy::block_dim_y) <= 65535) {
+            const dim3 grid(divUp(cols, block.x), divUp(rows, block.y));
+            transpose<Policy::tile_dim, Policy::block_dim_y> << <grid, block, 0, stream >> > (src, dst, rows, cols);
+        }
+        else {
+            constexpr int coarse_y = 64;
+            const dim3 grid(divUp(cols, block.x), divUp(rows, block.y * coarse_y));
+            transpose<Policy::tile_dim, Policy::block_dim_y,SrcPtr, DstType, coarse_y> << <grid, block, 0, stream >> > (src, dst, rows, cols);
+        }
+
         CV_CUDEV_SAFE_CALL( cudaGetLastError() );
 
         if (stream == 0)
