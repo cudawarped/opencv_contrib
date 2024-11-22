@@ -11,7 +11,7 @@ using namespace cv::cudacodec;
 #if !defined (HAVE_CUDA)
 Ptr<NVSurfaceToColorConverter> cv::cudacodec::createNVSurfaceToColorConverter(const ColorSpaceStandard, const bool){ throw_no_cuda(); }
 #else
-#include "ColorSpace.h"
+#include "cuda/ColorSpace.h"
 namespace cv { namespace cuda { namespace device {
 template<class BGR24> void Nv12ToColor24(uint8_t* dpNv12, int nNv12Pitch, uint8_t* dpColor, int nColorPitch, int nWidth, int nHeight, bool videoFullRangeFlag, const cudaStream_t stream);
 template<class RGB24> void Nv12ToColor24(uint8_t* dpNv12, int nNv12Pitch, uint8_t* dpColor, int nColorPitch, int nWidth, int nHeight, bool videoFullRangeFlag, const cudaStream_t stream);
