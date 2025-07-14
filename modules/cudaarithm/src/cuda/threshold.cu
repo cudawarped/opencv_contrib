@@ -172,15 +172,26 @@ otsu_variance(float2 *variance, uint *histogram, uint *threshold_sums, unsigned 
     }
 }
 
+struct MinLoc {
+    float value;
+    int idx;
+};
+
+__device__ __forceinline__  MinLoc minloc(const MinLoc& a, const MinLoc& b) {
+    if (a.value < b.value) return a;
+    if (b.value < a.value) return b;
+    // If values are equal, return the one with the smaller index
+    return (a.idx < b.idx) ? a : b;
+}
 
 __global__ void
 otsu_score(uint *otsu_threshold, uint *threshold_sums, float2 *variance)
 {
     const uint32_t n_thresholds = 256;
 
-    __shared__ float shared_memory[n_thresholds];
+    __shared__ MinLoc shared_memory[n_thresholds];
 
-    int threshold = threadIdx.x;
+    const int threshold = threadIdx.x;
 
     uint n_samples = threshold_sums[0];
     uint n_samples_above = threshold_sums[threshold];
@@ -190,31 +201,30 @@ otsu_score(uint *otsu_threshold, uint *threshold_sums, float2 *variance)
     float threshold_mean_below = (float)n_samples_below / n_samples;
 
     float2 variances = variance[threshold];
-    float variance_above = variances.x / n_samples_above;
-    float variance_below = variances.y / n_samples_below;
+    float variance_above = (n_samples_above > 0) ? variances.x / n_samples_above : 0.0f;
+    float variance_below = (n_samples_below > 0) ? variances.y / n_samples_below : 0.0f;
 
     float above = threshold_mean_above * variance_above;
     float below = threshold_mean_below * variance_below;
     float score = above + below;
 
-    float original_score = score;
-
-    blockReduce<n_thresholds>(shared_memory, score, threshold, minimum<float>());
-
-    if (threshold == 0)
-    {
-        shared_memory[0] = score;
-    }
+    MinLoc minLoc;
+    minLoc.value = score;
+    minLoc.idx = threshold;
+    shared_memory[threadIdx.x] = minLoc;
     __syncthreads();
 
-    score = shared_memory[0];
-
-    // We found the minimum score, but we need to find the threshold. If we find the thread with the minimum score, we
-    // know which threshold it is
-    if (original_score == score)
-    {
-        *otsu_threshold = threshold - 1;
+    int s = n_thresholds / 2;
+    while (s > 0) {
+        if (threadIdx.x < s) {
+            shared_memory[threadIdx.x] = minloc(shared_memory[threadIdx.x], shared_memory[threadIdx.x + s]);
+        }
+        __syncthreads();
+        s /= 2;
     }
+
+    if(threadIdx.x == 0)
+        *otsu_threshold = shared_memory[0].idx - 1;
 }
 
 void compute_otsu(uint *histogram, uint *otsu_threshold, Stream &stream)
